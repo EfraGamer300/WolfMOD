@@ -3,7 +3,7 @@
   "minVersion": "0.8",
   "package": "dev.EfraGroup.wolfmod.mixin",
   "compatibilityLevel": "JAVA_21",
-  "refmap": "wolfnmod-refmap.json",
+  "refmap": "wolfnod-refmap.json",
   "mixins": [
   ],
   "injectors": {

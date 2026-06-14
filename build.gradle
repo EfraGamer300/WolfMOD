@@ -14,7 +14,7 @@ loom {
     splitEnvironmentSourceSets()
 
     mods {
-        "wolfnmod" {
+        "wolfnod" {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
         }
@@ -22,7 +22,7 @@ loom {
 
     // ADICIONE ESTE BLOCO AQUI:
     mixin {
-        defaultRefmapName = "wolfmod-refmap.json"
+        defaultRefmapName = "wolfnod-refmap.json"
     }
 }
 
@@ -86,7 +86,7 @@ java {
 }
 
 jar {
-    from("LICENSE") {
+    from("LICENSE.txt") {
         rename { "${it}_${project.archives_base_name}" }
     }
 }

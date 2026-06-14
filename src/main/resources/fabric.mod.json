@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "id": "wolfnmod",
+  "id": "wolfnod",
   "version": "${version}",
-  "name": "WolfNMod",
+  "name": "WolfNod",
   "description": "The official mod for WolfNetwork.",
   "authors": [
     "EfraMLG",
     "WolfNetwork team"
   ],
   "contact": {
-    "email": "wolfnetwork.gmail.com"
+    "email": "wolfnetwork@gmail.com"
   },
   "license": "All-Rights-Reserved",
   "icon": "assets/wolfmod/icon.png",
-  "environment": "client",
+  "environment": "*",
   "entrypoints": {
     "fabric-datagen": [
       "dev.EfraGroup.wolfmod.client.WolfmodDataGenerator"

@@ -10,6 +10,7 @@ tmp/
 .superpowers/
 .claude/
 run/
+txt.txt
 
 # OS
 Thumbs.db
