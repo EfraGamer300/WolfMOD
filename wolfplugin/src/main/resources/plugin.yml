@@ -1,0 +1,7 @@
+name: WolfPlugin
+version: '${version}'
+main: dev.EfraGroup.wolfplugin.WolfPlugin
+api-version: '1.21'
+description: Plugin para enviar informacoes do servidor ao mod WolfMOD
+author: EfraGroup
+

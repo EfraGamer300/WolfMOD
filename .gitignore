@@ -1,0 +1,16 @@
+.gradle/
+build/
+out/
+bin/
+tmp/
+.idea/
+*.iml
+*.ipr
+*.iws
+.superpowers/
+.claude/
+run/
+
+# OS
+Thumbs.db
+.DS_Store

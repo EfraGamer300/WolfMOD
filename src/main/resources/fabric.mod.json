@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "wolfnmod",
+  "version": "${version}",
+  "name": "WolfNMod",
+  "description": "The official mod for WolfNetwork.",
+  "authors": [
+    "EfraMLG",
+    "WolfNetwork team"
+  ],
+  "contact": {
+    "email": "wolfnetwork.gmail.com"
+  },
+  "license": "All-Rights-Reserved",
+  "icon": "assets/wolfmod/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-datagen": [
+      "dev.EfraGroup.wolfmod.client.WolfmodDataGenerator"
+    ],
+    "client": [
+      "dev.EfraGroup.wolfmod.client.WolfmodClient"
+    ],
+    "main": [
+      "dev.EfraGroup.wolfmod.Wolfmod"
+    ]
+  },
+  "mixins": [
+    "wolfmod.mixins.json",
+    {
+      "config": "wolfmod.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "accessWidener": "wolfmod.accesswidener",
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

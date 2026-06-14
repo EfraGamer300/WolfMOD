@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.EfraGroup.wolfmod.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "wolfnmod-refmap.json",
+  "client": [
+    "AbstractBoatEntityRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
