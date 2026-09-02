@@ -2,6 +2,7 @@ package dev.EfraGroup.wolfplugin;
 
 import dev.EfraGroup.wolfplugin.utils.VarIntUtils;
 import dev.EfraGroup.wolfplugin.vehicle.CarPhysics;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -17,7 +18,9 @@ import org.bukkit.scheduler.BukkitTask;
 public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageListener {
 
     private static final String CHANNEL = "wolfnetwork:settings";
+    private static final String RADIO_CHANNEL = "formularacing:radio";
     private final Map<UUID, BukkitTask> pendingHandshakeTasks = new HashMap<>();
+    private final Map<UUID, String> pendingTireChanges = new HashMap<>();
     private byte[] handshakePayload;
     private byte[] serverInfoPayload;
     private CarPhysics carPhysics;
@@ -34,6 +37,7 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
 
         // Registrar canal incoming (cliente -> servidor)
         getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL, this);
+        getServer().getMessenger().registerIncomingPluginChannel(this, RADIO_CHANNEL, this);
 
         // Registrar eventos
         getServer().getPluginManager().registerEvents(this, this);
@@ -54,6 +58,7 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
 
         getServer().getMessenger().unregisterOutgoingPluginChannel(this, CHANNEL);
         getServer().getMessenger().unregisterIncomingPluginChannel(this, CHANNEL);
+        getServer().getMessenger().unregisterIncomingPluginChannel(this, RADIO_CHANNEL);
         getLogger().info("WolfPlugin desabilitado.");
     }
 
@@ -80,14 +85,19 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         if (carPhysics != null) {
             carPhysics.clearInput(event.getPlayer().getUniqueId());
         }
+        pendingTireChanges.remove(event.getPlayer().getUniqueId());
     }
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        if (!channel.equals(CHANNEL)) {
-            return;
+        if (CHANNEL.equals(channel)) {
+            handleSettingsMessage(player, message);
+        } else if (RADIO_CHANNEL.equals(channel)) {
+            handleRadioMessage(player, message);
         }
+    }
 
+    private void handleSettingsMessage(Player player, byte[] message) {
         try {
             VarIntUtils.DecodedStrings decoded = VarIntUtils.decodeStrings(message);
             String key = decoded.key();
@@ -112,6 +122,27 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
             }
         } catch (Exception e) {
             getLogger().warning("Erro ao processar mensagem do canal " + CHANNEL + " de " + player.getName() + ": " + e.getMessage());
+        }
+    }
+
+    private void handleRadioMessage(Player player, byte[] message) {
+        try {
+            String raw = new String(message, StandardCharsets.UTF_8);
+            String[] parts = raw.split(":", 2);
+            if (parts.length != 2) {
+                return;
+            }
+            String key = parts[0];
+            String value = parts[1];
+
+            if ("SELECAO_PNEU".equals(key)) {
+                pendingTireChanges.put(player.getUniqueId(), value);
+                player.sendPluginMessage(this, CHANNEL, VarIntUtils.encodeString("tire_ack", value));
+                player.sendMessage("§e[Wolf] §aPneu selecionado para o próximo pit: §e" + value);
+                getLogger().info("Jogador " + player.getName() + " pediu pneus " + value + " para o próximo pit.");
+            }
+        } catch (Exception e) {
+            getLogger().warning("Erro ao processar mensagem de rádio de " + player.getName() + ": " + e.getMessage());
         }
     }
 }

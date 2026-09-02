@@ -9,11 +9,16 @@ import dev.EfraGroup.wolfmod.client.ghost.GhostRenderer;
 import dev.EfraGroup.wolfmod.client.hud.FastestLap;
 import dev.EfraGroup.wolfmod.client.hud.Hud;
 import dev.EfraGroup.wolfmod.client.hud.PauseHud;
+import dev.EfraGroup.wolfmod.client.radio.RadioConfigScreen;
+import dev.EfraGroup.wolfmod.client.radio.RadioManager;
+import dev.EfraGroup.wolfmod.client.radio.RadioSettings;
 import dev.EfraGroup.wolfmod.network.GhostDataPayload;
+import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -22,13 +27,43 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.GameMenuScreen;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
+import org.lwjgl.glfw.GLFW;
 
 public class WolfmodClient implements ClientModInitializer {
     public static final double MOD_VERSION = 0.1;
+    private static KeyBinding radioKeyBinding;
+    private static KeyBinding configKeyBinding;
 
     @Override
     public void onInitializeClient() {
+        radioKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.wolfnmod.radio",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_KP_0,
+                "category.wolfnmod.radio"
+        ));
+
+        configKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.wolfnmod.radio_config",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_KP_DECIMAL,
+                "category.wolfnmod.radio"
+        ));
+
+        RadioSettings.load();
+
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (radioKeyBinding.wasPressed()) {
+                RadioManager.startRecording();
+            }
+            if (configKeyBinding.wasPressed()) {
+                client.setScreen(new RadioConfigScreen());
+            }
+        });
+
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             DebugCommand.register(dispatcher);
             FastestLapCommand.register(dispatcher);
@@ -38,6 +73,7 @@ public class WolfmodClient implements ClientModInitializer {
         PayloadTypeRegistry.playS2C().register(WolfConfigPayload.ID, WolfConfigPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(GhostDataPayload.ID, GhostDataPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(WolfConfigPayload.ID, WolfConfigPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(RadioPayload.ID, RadioPayload.CODEC);
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> {
             Hud.render(drawContext, tickCounter.getTickDelta(true));
@@ -87,6 +123,11 @@ public class WolfmodClient implements ClientModInitializer {
                 case "ghost_start" -> context.client().execute(GhostManagerClient::startPlayback);
                 case "ghost_stop" -> context.client().execute(GhostManagerClient::stopPlayback);
                 case "ghost_clear" -> context.client().execute(GhostManagerClient::clearGhost);
+                case "tire_ack" -> context.client().execute(() -> {
+                    if (context.player() != null) {
+                        context.player().sendMessage(Text.literal("§e[Rádio] §aPneu selecionado para o próximo pit: §e" + payload.value()), true);
+                    }
+                });
                 case "ers" -> context.client().execute(() -> context.player().sendMessage(Text.literal("Â§6[Wolf] Â§fERS: Â§e" + payload.value()), true));
                 case "server_info" -> context.client().execute(() -> ServerInfoManager.updateFromServer(payload.value()));
                 case "wolfac_checkmods" -> {

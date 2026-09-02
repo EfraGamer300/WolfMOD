@@ -4,7 +4,7 @@ import dev.EfraGroup.wolfmod.network.GhostDataPayload;
 
 public final class GhostManagerClient {
     private static final GhostPlayback PLAYBACK = new GhostPlayback();
-    private static boolean enabled = true;
+    private static volatile boolean enabled = true;
 
     private GhostManagerClient() {
     }
@@ -22,6 +22,9 @@ public final class GhostManagerClient {
                 payload.yaws(),
                 payload.pitches()
         ));
+        if (enabled) {
+            PLAYBACK.start();
+        }
     }
 
     public static void startPlayback() {

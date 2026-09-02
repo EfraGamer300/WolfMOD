@@ -4,9 +4,9 @@ import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
 import net.minecraft.util.math.MathHelper;
 
 public final class GhostPlayback {
-    private GhostData ghostData;
-    private boolean active;
-    private int frameIndex;
+    private volatile GhostData ghostData;
+    private volatile boolean active;
+    private volatile int frameIndex;
 
     public void setGhostData(GhostData ghostData) {
         this.ghostData = ghostData;
@@ -30,41 +30,46 @@ public final class GhostPlayback {
     }
 
     public GhostPose samplePose() {
-        if (!active || ghostData == null || !Timer.isRunning()) {
+        if (!active) {
+            return null;
+        }
+
+        GhostData data = ghostData;
+        if (data == null || !Timer.isRunning()) {
             return null;
         }
 
         float targetTick = Timer.getElapsedMillis() / 50.0f;
-        int frameCount = ghostData.frameCount();
+        int frameCount = data.frameCount();
         if (frameCount == 0) {
             return null;
         }
 
-        while (frameIndex + 1 < frameCount && ghostData.ticks()[frameIndex + 1] <= targetTick) {
+        while (frameIndex + 1 < frameCount && data.ticks()[frameIndex + 1] <= targetTick) {
             frameIndex++;
         }
 
         if (frameIndex >= frameCount - 1) {
             active = false;
             return new GhostPose(
-                    ghostData.xs()[frameCount - 1],
-                    ghostData.ys()[frameCount - 1],
-                    ghostData.zs()[frameCount - 1],
-                    ghostData.yaws()[frameCount - 1],
-                    ghostData.pitches()[frameCount - 1]
+                    data.xs()[frameCount - 1],
+                    data.ys()[frameCount - 1],
+                    data.zs()[frameCount - 1],
+                    data.yaws()[frameCount - 1],
+                    data.pitches()[frameCount - 1]
             );
         }
 
-        int currentTick = ghostData.ticks()[frameIndex];
-        int nextTick = ghostData.ticks()[frameIndex + 1];
+        int currentTick = data.ticks()[frameIndex];
+        int nextTick = data.ticks()[frameIndex + 1];
         float progress = nextTick == currentTick ? 0.0f : MathHelper.clamp((targetTick - currentTick) / (float) (nextTick - currentTick), 0.0f, 1.0f);
 
         return new GhostPose(
-                MathHelper.lerp(progress, ghostData.xs()[frameIndex], ghostData.xs()[frameIndex + 1]),
-                MathHelper.lerp(progress, ghostData.ys()[frameIndex], ghostData.ys()[frameIndex + 1]),
-                MathHelper.lerp(progress, ghostData.zs()[frameIndex], ghostData.zs()[frameIndex + 1]),
-                MathHelper.lerpAngleDegrees(progress, ghostData.yaws()[frameIndex], ghostData.yaws()[frameIndex + 1]),
-                MathHelper.lerp(progress, ghostData.pitches()[frameIndex], ghostData.pitches()[frameIndex + 1])
+                MathHelper.lerp(progress, data.xs()[frameIndex], data.xs()[frameIndex + 1]),
+                MathHelper.lerp(progress, data.ys()[frameIndex], data.ys()[frameIndex + 1]),
+                MathHelper.lerp(progress, data.zs()[frameIndex], data.zs()[frameIndex + 1]),
+                MathHelper.lerpAngleDegrees(progress, data.yaws()[frameIndex], data.yaws()[frameIndex + 1]),
+                MathHelper.lerp(progress, data.pitches()[frameIndex], data.pitches()[frameIndex + 1])
         );
     }
 }
