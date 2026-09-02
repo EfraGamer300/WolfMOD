@@ -54,6 +54,66 @@ Criado para a **Wolf Network**, funciona tanto no cliente quanto integrado ao se
 
 ---
 
+## WolfPlugin - Counterpart Server-Side
+
+O WolfMOD inclui o **WolfPlugin**, um plugin Paper que recebe input do mod cliente e aplica **física de carro realista** nos barcos.
+
+### Como Funciona
+
+```
+[WolfMOD Client]                    [WolfPlugin Server]
+       │                                    │
+       ├── Envia input (WASD) ──────────────►│
+       │    via Plugin Messages              │
+       │                                    │
+       │◄── Recebe server info ─────────────┤
+       │                                    │
+       │                         Aplica física realista:
+       │                         • Massa: 1520kg
+       │                         • Força do motor: 6400N
+       │                         • Freios: 8600N
+       │                         • Arrasto aerodinâmico
+       │                         • Tração lateral
+       │                         • Rotação travada
+       ▼                                    ▼
+```
+
+### CarPhysics - Física Realista
+
+O `CarPhysics` simula comportamento real de veículo:
+
+| Parâmetro | Valor | Efeito |
+|-----------|-------|--------|
+| Massa | 1520 kg | Peso realista |
+| Força Motor | 6400 N | Aceleração progressiva |
+| Freios | 8600 N | Parada responsiva |
+| Arrasto | 0.020 | Desaceleração natural |
+| Resistência Rolagem | 0.060 | Perda de velocidade |
+| Velocidade Máx | 1.0 bloco/tick | Limite realista |
+| Tração | 0.96 | Aderência nas curvas |
+
+### Comunicação Cliente-Servidor
+
+**Canal:** `wolfnetwork:settings`
+
+**Mensagens:**
+- `version_reply` - Cliente confirma que tem o mod
+- `boat_input` - Input do jogador (forward, backward, left, right)
+- `server_info` - Servidor envia informações
+
+### Instalação do WolfPlugin
+
+```bash
+# O WolfPlugin está em wolfplugin/
+cd wolfplugin
+../gradlew build
+
+# Copie o JAR para plugins/
+cp build/libs/wolfplugin-*.jar ../plugins/
+```
+
+---
+
 ## Requisitos
 
 | Componente | Versão | Obrigatório |
@@ -62,6 +122,7 @@ Criado para a **Wolf Network**, funciona tanto no cliente quanto integrado ao se
 | Fabric Loader | 0.16.9+ | ✅ Sim |
 | Fabric API | 0.106.1+ | ✅ Sim |
 | Java | 21+ | ✅ Sim |
+| Paper (servidor) | 1.21+ | ✅ (WolfPlugin) |
 
 ---
 
@@ -154,25 +215,34 @@ O WolfMOD funciona em conjunto com o plugin FormulaRacing no servidor:
 ### Estrutura
 
 ```
-src/
-├── client/
-│   ├── java/dev/EfraGroup/wolfmod/client/
-│   │   ├── commands/      # Comandos do cliente
-│   │   ├── ghost/         # Sistema de ghost
-│   │   ├── hud/           # Interface HUD
-│   │   ├── radio/         # Sistema de radio
-│   │   ├── vehicle/       # Controle de veículo
-│   │   └── WolfmodClient.java
-│   └── resources/         # Mixins e assets
-├── main/
-│   └── java/dev/EfraGroup/wolfmod/
-│       ├── network/       # Pacotes de rede
-│       └── Wolfmod.java
+WolfMOD/
+├── src/                        # Mod Fabric (cliente)
+│   ├── client/
+│   │   ├── java/dev/EfraGroup/wolfmod/client/
+│   │   │   ├── commands/      # Comandos do cliente
+│   │   │   ├── ghost/         # Sistema de ghost
+│   │   │   ├── hud/           # Interface HUD
+│   │   │   ├── radio/         # Sistema de radio
+│   │   │   ├── vehicle/       # Controle de veículo
+│   │   │   └── WolfmodClient.java
+│   │   └── resources/         # Mixins e assets
+│   └── main/
+│       └── java/dev/EfraGroup/wolfmod/
+│           ├── network/       # Pacotes de rede
+│           └── Wolfmod.java
+├── wolfplugin/                 # Plugin Paper (servidor)
+│   └── src/main/java/dev/EfraGroup/wolfplugin/
+│       ├── WolfPlugin.java    # Handshake e comunicação
+│       ├── vehicle/
+│       │   └── CarPhysics.java # Física de carro realista
+│       └── utils/
+│           └── VarIntUtils.java # Codificação de mensagens
 └── Wolfmod.java
 ```
 
 ### Build
 
+**Mod Fabric:**
 ```bash
 # Build completo
 ./gradlew build
@@ -185,6 +255,13 @@ src/
 
 # Executar client de teste
 ./gradlew runClient
+```
+
+**WolfPlugin (Paper):**
+```bash
+cd wolfplugin
+./gradlew build
+# JAR estará em wolfplugin/build/libs/
 ```
 
 ### Dependências
