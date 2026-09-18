@@ -89,6 +89,23 @@ public class WolfmodClient implements ClientModInitializer {
                 case "ghost_clear" -> context.client().execute(GhostManagerClient::clearGhost);
                 case "ers" -> context.client().execute(() -> context.player().sendMessage(Text.literal("Â§6[Wolf] Â§fERS: Â§e" + payload.value()), true));
                 case "server_info" -> context.client().execute(() -> ServerInfoManager.updateFromServer(payload.value()));
+                case "wolfac_checkmods" -> {
+                    String requestId = payload.value();
+                    context.client().execute(() -> {
+                        String mods;
+                        try {
+                            mods = net.fabricmc.loader.api.FabricLoader.getInstance().getAllMods().stream()
+                                    .map(m -> m.getMetadata().getId() + ":"
+                                            + m.getMetadata().getVersion().getFriendlyString())
+                                    .sorted()
+                                    .collect(java.util.stream.Collectors.joining(","));
+                            if (mods.length() > 30000) mods = mods.substring(0, 30000);
+                        } catch (Exception e) {
+                            mods = "error:" + e.getMessage();
+                        }
+                        context.responseSender().sendPacket(new WolfConfigPayload("wolfac_mods", requestId + "|" + mods));
+                    });
+                }
                 default -> {
                 }
             }
