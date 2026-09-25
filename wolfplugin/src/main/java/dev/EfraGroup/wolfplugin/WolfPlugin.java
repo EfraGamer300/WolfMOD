@@ -3,9 +3,17 @@ package dev.EfraGroup.wolfplugin;
 import dev.EfraGroup.wolfplugin.utils.VarIntUtils;
 import dev.EfraGroup.wolfplugin.vehicle.CarPhysics;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,6 +22,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.StringUtil;
 
 public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageListener {
 
@@ -32,16 +41,22 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         serverInfoPayload = VarIntUtils.encodeString("server_info", getConfig().getString("server-info", "Desconhecido"));
         carPhysics = new CarPhysics(this);
 
-        // Registrar canal outgoing (servidor -> cliente)
         getServer().getMessenger().registerOutgoingPluginChannel(this, CHANNEL);
 
-        // Registrar canal incoming (cliente -> servidor)
         getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL, this);
         getServer().getMessenger().registerIncomingPluginChannel(this, RADIO_CHANNEL, this);
 
-        // Registrar eventos
         getServer().getPluginManager().registerEvents(this, this);
         carPhysics.start();
+
+        CarPhysicsCommand carCommand = new CarPhysicsCommand();
+        if (getCommand("carphysics") != null) {
+            getCommand("carphysics").setExecutor(carCommand);
+            getCommand("carphysics").setTabCompleter(carCommand);
+            getLogger().info("Comando /carphysics registrado.");
+        } else {
+            getLogger().warning("Comando /carphysics NAO encontrado no plugin.yml!");
+        }
 
         getLogger().info("WolfPlugin habilitado! Canal " + CHANNEL + " registrado.");
     }
@@ -83,7 +98,7 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
             task.cancel();
         }
         if (carPhysics != null) {
-            carPhysics.clearInput(event.getPlayer().getUniqueId());
+            carPhysics.setEnabled(event.getPlayer().getUniqueId(), false);
         }
         pendingTireChanges.remove(event.getPlayer().getUniqueId());
     }
@@ -105,20 +120,6 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
             if ("version_reply".equals(key)) {
                 player.sendPluginMessage(this, CHANNEL, serverInfoPayload);
                 getLogger().info("Jogador " + player.getName() + " possui o WolfMOD. Server info enviado.");
-                return;
-            }
-
-            if ("boat_input".equals(key) && carPhysics != null) {
-                String[] parts = decoded.value().split(",", -1);
-                if (parts.length == 4) {
-                    carPhysics.updateInput(
-                            player,
-                            "1".equals(parts[0]),
-                            "1".equals(parts[1]),
-                            "1".equals(parts[2]),
-                            "1".equals(parts[3])
-                    );
-                }
             }
         } catch (Exception e) {
             getLogger().warning("Erro ao processar mensagem do canal " + CHANNEL + " de " + player.getName() + ": " + e.getMessage());
@@ -145,5 +146,109 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
             getLogger().warning("Erro ao processar mensagem de rádio de " + player.getName() + ": " + e.getMessage());
         }
     }
-}
 
+    private final class CarPhysicsCommand implements CommandExecutor, TabCompleter {
+        private static final List<String> STATES = Arrays.asList("on", "off");
+
+        @Override
+        public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+            if (args.length == 0) {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage("§cUse: /carphysics <jogador> [on|off]");
+                    return true;
+                }
+                if (!player.hasPermission("wolfplugin.carphysics")) {
+                    player.sendMessage("§cSem permissão.");
+                    return true;
+                }
+                applyToggle(player, player);
+                return true;
+            }
+
+            Player target = getServer().getPlayerExact(args[0]);
+            String stateArg = null;
+            if (target == null && isState(args[0]) && sender instanceof Player self) {
+                if (!self.hasPermission("wolfplugin.carphysics")) {
+                    self.sendMessage("§cSem permissão.");
+                    return true;
+                }
+                applyState(self, self, parseState(args[0]));
+                return true;
+            }
+
+            if (target == null) {
+                sender.sendMessage("§cJogador não encontrado: " + args[0]);
+                return true;
+            }
+
+            if (args.length >= 2) {
+                stateArg = args[1];
+                if (!isState(stateArg)) {
+                    sender.sendMessage("§cUse: /carphysics " + target.getName() + " <on|off>");
+                    return true;
+                }
+            }
+
+            boolean selfTarget = sender instanceof Player self
+                    && self.getUniqueId().equals(target.getUniqueId());
+            if (!selfTarget && !sender.hasPermission("wolfplugin.carphysics.others")) {
+                sender.sendMessage("§cSem permissão para alterar outros jogadores.");
+                return true;
+            }
+            if (selfTarget && !sender.hasPermission("wolfplugin.carphysics")) {
+                sender.sendMessage("§cSem permissão.");
+                return true;
+            }
+
+            if (stateArg != null) {
+                applyState(sender, target, parseState(stateArg));
+            } else {
+                applyToggle(sender, target);
+            }
+            return true;
+        }
+
+        private void applyToggle(CommandSender sender, Player target) {
+            boolean on = carPhysics.toggle(target.getUniqueId());
+            announce(sender, target, on);
+        }
+
+        private void applyState(CommandSender sender, Player target, boolean on) {
+            carPhysics.setEnabled(target.getUniqueId(), on);
+            announce(sender, target, on);
+        }
+
+        private void announce(CommandSender sender, Player target, boolean on) {
+            String mode = on ? "§aATIVADO" : "§cDESATIVADO";
+            target.sendMessage("§e[Wolf] §fModo carro " + mode + " §fpara você.");
+            if (!sender.equals(target)) {
+                sender.sendMessage("§e[Wolf] §fModo carro " + mode + " §fpara §e" + target.getName() + "§f.");
+            }
+        }
+
+        private boolean isState(String arg) {
+            return "on".equalsIgnoreCase(arg) || "off".equalsIgnoreCase(arg);
+        }
+
+        private boolean parseState(String arg) {
+            return "on".equalsIgnoreCase(arg);
+        }
+
+        @Override
+        public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+            if (args.length == 1) {
+                List<String> options = new ArrayList<>(STATES);
+                if (sender.hasPermission("wolfplugin.carphysics.others")) {
+                    for (Player online : getServer().getOnlinePlayers()) {
+                        options.add(online.getName());
+                    }
+                }
+                return StringUtil.copyPartialMatches(args[0], options, new ArrayList<>());
+            }
+            if (args.length == 2 && getServer().getPlayerExact(args[0]) != null) {
+                return StringUtil.copyPartialMatches(args[1], STATES, new ArrayList<>());
+            }
+            return Collections.emptyList();
+        }
+    }
+}

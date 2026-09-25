@@ -4,4 +4,16 @@ main: dev.EfraGroup.wolfplugin.WolfPlugin
 api-version: '1.21'
 description: Plugin para enviar informacoes do servidor ao mod WolfMOD
 author: EfraGroup
+permissions:
+  wolfplugin.carphysics:
+    description: Permite ativar/desativar o modo carro em si mesmo
+    default: true
+  wolfplugin.carphysics.others:
+    description: Permite ativar/desativar o modo carro em outros jogadores
+    default: op
+commands:
+  carphysics:
+    description: Ativa/desativa a fisica de carro no barco
+    usage: /carphysics [jogador] [on|off]
+    permission: wolfplugin.carphysics
 

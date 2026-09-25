@@ -1,6 +1,8 @@
 package dev.EfraGroup.wolfmod.client;
 
 import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
+import dev.EfraGroup.wolfmod.client.TimeTrial.WolfTimingClient;
+import dev.EfraGroup.wolfmod.client.commands.CarPhysicsCommand;
 import dev.EfraGroup.wolfmod.client.commands.DebugCommand;
 import dev.EfraGroup.wolfmod.client.commands.FastestLapCommand;
 import dev.EfraGroup.wolfmod.client.commands.GhostToggleCommand;
@@ -12,6 +14,7 @@ import dev.EfraGroup.wolfmod.client.hud.PauseHud;
 import dev.EfraGroup.wolfmod.client.radio.RadioConfigScreen;
 import dev.EfraGroup.wolfmod.client.radio.RadioManager;
 import dev.EfraGroup.wolfmod.client.radio.RadioSettings;
+import dev.EfraGroup.wolfmod.client.vehicle.CarPhysics;
 import dev.EfraGroup.wolfmod.network.GhostDataPayload;
 import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
@@ -36,6 +39,7 @@ public class WolfmodClient implements ClientModInitializer {
     public static final double MOD_VERSION = 0.1;
     private static KeyBinding radioKeyBinding;
     private static KeyBinding configKeyBinding;
+    private static WolfTimingClient timingClient;
 
     @Override
     public void onInitializeClient() {
@@ -54,6 +58,10 @@ public class WolfmodClient implements ClientModInitializer {
         ));
 
         RadioSettings.load();
+        timingClient = new WolfTimingClient();
+
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
+                timingClient.onJoin(client, sender));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (radioKeyBinding.wasPressed()) {
@@ -68,6 +76,7 @@ public class WolfmodClient implements ClientModInitializer {
             DebugCommand.register(dispatcher);
             FastestLapCommand.register(dispatcher);
             GhostToggleCommand.register(dispatcher);
+            CarPhysicsCommand.register(dispatcher);
         });
 
         PayloadTypeRegistry.playS2C().register(WolfConfigPayload.ID, WolfConfigPayload.CODEC);
@@ -93,10 +102,18 @@ public class WolfmodClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ServerInfoManager.reset();
             GhostManagerClient.clearGhost();
+            if (timingClient != null) {
+                timingClient.onDisconnect();
+            }
             Timer.reset();
+            CarPhysics.clear();
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            CarPhysics.tick(client);
+            if (timingClient != null) {
+                timingClient.tick(client);
+            }
             if (client.world != null && !client.isPaused()) {
                 Timer.update();
                 FastestLap.tick();
@@ -105,6 +122,14 @@ public class WolfmodClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(WolfConfigPayload.ID, (payload, context) -> {
             String key = payload.key();
+            if (WolfTimingClient.isTimingKey(key)) {
+                context.client().execute(() -> {
+                    if (timingClient != null) {
+                        timingClient.handle(payload, context.responseSender());
+                    }
+                });
+                return;
+            }
             switch (key) {
                 case "1" -> {
                     String mcVersion = MinecraftClient.getInstance().getGameVersion();
@@ -112,11 +137,15 @@ public class WolfmodClient implements ClientModInitializer {
                     context.responseSender().sendPacket(new WolfConfigPayload("version_reply", data));
                 }
                 case "2" -> context.client().execute(() -> {
-                    Timer.start();
+                    if (timingClient == null || !timingClient.ownsTimer()) {
+                        Timer.start();
+                    }
                     GhostManagerClient.startPlayback();
                 });
                 case "3" -> context.client().execute(() -> {
-                    Timer.stop();
+                    if (timingClient == null || !timingClient.ownsTimer()) {
+                        Timer.stop();
+                    }
                     GhostManagerClient.stopPlayback();
                 });
                 case "4" -> context.client().execute(() -> FastestLap.show(payload.value(), "1:36.530"));

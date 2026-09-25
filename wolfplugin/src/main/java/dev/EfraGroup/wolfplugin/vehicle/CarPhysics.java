@@ -2,12 +2,15 @@ package dev.EfraGroup.wolfplugin.vehicle;
 
 import dev.EfraGroup.wolfplugin.WolfPlugin;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -15,39 +18,37 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 public final class CarPhysics {
-    // Simulated vehicle mass. Higher values make throttle and braking feel heavier.
-    private static final double MASS = 1520.0;
-    // Forward engine force. Raise for faster launches.
-    private static final double ENGINE_FORCE = 6400.0;
-    // Reverse engine force. Keep lower than forward force for believable reverse.
-    private static final double REVERSE_ENGINE_FORCE = 2900.0;
-    // Brake force applied before the boat starts reversing.
-    private static final double BRAKING_FORCE = 8600.0;
-    // Aerodynamic drag and rolling resistance used while coasting.
-    private static final double DRAG_COEFFICIENT = 0.020;
-    private static final double ROLLING_RESISTANCE = 0.060;
-    // Top speed limits, in blocks per tick.
-    private static final double TOP_SPEED = 1.00;
-    private static final double MAX_REVERSE_SPEED = 0.28;
-    // High lateral grip keeps the boat glued to its forward axis.
-    private static final double TRACTION = 0.96;
-    // Input filtering. Lower values feel softer and less twitchy.
-    private static final double THROTTLE_RESPONSE = 0.10;
-    private static final double THROTTLE_RETURN = 0.08;
-    // Lateral slip damping keeps transitions smooth instead of twitchy.
-    private static final double LATERAL_SMOOTHING = 0.35;
-    // Stronger low-speed damping prevents endless crawling.
-    private static final double LOW_SPEED_DAMPING = 0.92;
-    // If the client stops sending inputs, discard them after this many ticks.
-    private static final long INPUT_TIMEOUT_TICKS = 12L;
-    private static final double TICK_SECONDS = 1.0 / 20.0;
+
+    private static final double TOP_SPEED = 0.85;
+    private static final double BOOST_MULT = 1.30;
+    private static final double MAX_REVERSE = 0.30;
+    private static final double ACCEL = 0.045;
+    private static final double ACCEL_REVERSE = 0.030;
+    private static final double BRAKE_FORCE = 0.10;
+    private static final double HANDBRAKE_FORCE = 0.16;
+    private static final double COAST_DECEL = 0.012;
+    private static final double DRAG = 0.008;
+    private static final double GRIP = 0.90;
+    private static final double DRIFT_GRIP = 0.30;
+    private static final double STEER_DEG = 4.2;
+    private static final double GRAVITY = 0.08;
+    private static final double MAX_FALL = 0.70;
+    private static final double STEP_LIFT = 0.42;
+
+    private static final Input NEUTRAL = new Input() {
+        @Override public boolean isForward() { return false; }
+        @Override public boolean isBackward() { return false; }
+        @Override public boolean isLeft() { return false; }
+        @Override public boolean isRight() { return false; }
+        @Override public boolean isJump() { return false; }
+        @Override public boolean isSneak() { return false; }
+        @Override public boolean isSprint() { return false; }
+    };
 
     private final WolfPlugin plugin;
-    private final Map<UUID, Double> currentSpeeds = new HashMap<>();
-    private final Map<UUID, Double> throttleStates = new HashMap<>();
-    private final Map<UUID, Double> lateralVelocities = new HashMap<>();
-    private final Map<UUID, Float> lockedYaws = new HashMap<>();
-    private final Map<UUID, InputState> playerInputs = new HashMap<>();
+    private final Set<UUID> enabled = new HashSet<>();
+    private final Map<UUID, CarState> states = new HashMap<>();
+    private final Map<UUID, UUID> lastBoat = new HashMap<>();
     private BukkitTask tickTask;
 
     public CarPhysics(WolfPlugin plugin) {
@@ -58,7 +59,6 @@ public final class CarPhysics {
         if (tickTask != null) {
             return;
         }
-
         tickTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
     }
 
@@ -67,140 +67,208 @@ public final class CarPhysics {
             tickTask.cancel();
             tickTask = null;
         }
-
-        currentSpeeds.clear();
-        throttleStates.clear();
-        lateralVelocities.clear();
-        lockedYaws.clear();
-        playerInputs.clear();
+        for (Map.Entry<UUID, UUID> entry : lastBoat.entrySet()) {
+            Entity entity = plugin.getServer().getEntity(entry.getValue());
+            if (entity instanceof Boat boat) {
+                restore(boat);
+            }
+        }
+        states.clear();
+        lastBoat.clear();
+        enabled.clear();
     }
 
-    public void updateInput(Player player, boolean forward, boolean backward, boolean left, boolean right) {
-        playerInputs.put(player.getUniqueId(), new InputState(forward, backward, left, right, plugin.getServer().getCurrentTick()));
+    public boolean isEnabled(UUID playerId) {
+        return enabled.contains(playerId);
     }
 
-    public void clearInput(UUID playerId) {
-        playerInputs.remove(playerId);
+    public void setEnabled(UUID playerId, boolean on) {
+        if (on) {
+            enabled.add(playerId);
+        } else {
+            enabled.remove(playerId);
+            restorePlayerBoat(playerId);
+        }
+    }
+
+    public boolean toggle(UUID playerId) {
+        boolean on = !enabled.contains(playerId);
+        setEnabled(playerId, on);
+        return on;
     }
 
     private void tick() {
-        expireStaleInputs();
-
         for (Player player : plugin.getServer().getOnlinePlayers()) {
+            UUID playerId = player.getUniqueId();
             Entity vehicle = player.getVehicle();
-            if (!(vehicle instanceof Boat boat)) {
-                clearInput(player.getUniqueId());
-                continue;
+            if (enabled.contains(playerId)
+                    && vehicle instanceof Boat boat
+                    && boat.getPassengers().contains(player)) {
+                lastBoat.put(playerId, boat.getUniqueId());
+                Input input = player.getCurrentInput();
+                drive(boat, input != null ? input : NEUTRAL);
+            } else {
+                restoreIfLeft(playerId);
             }
-
-            InputState input = playerInputs.get(player.getUniqueId());
-            if (input == null) {
-                input = InputState.idle(plugin.getServer().getCurrentTick());
-            }
-
-            applyCarPhysics(boat, player, input);
         }
-
         pruneUnusedStates();
     }
 
-    @SuppressWarnings("deprecation")
-    private void applyCarPhysics(Boat boat, Player driver, InputState input) {
-        UUID boatId = boat.getUniqueId();
+    private void restoreIfLeft(UUID playerId) {
+        UUID boatId = lastBoat.remove(playerId);
+        if (boatId == null) {
+            return;
+        }
+        Entity entity = plugin.getServer().getEntity(boatId);
+        if (entity instanceof Boat boat) {
+            restore(boat);
+        }
+    }
+
+    private void restorePlayerBoat(UUID playerId) {
+        Player player = plugin.getServer().getPlayer(playerId);
+        if (player != null && player.getVehicle() instanceof Boat boat) {
+            restore(boat);
+        }
+        restoreIfLeft(playerId);
+    }
+
+    private void drive(Boat boat, Input input) {
+        CarState state = states.computeIfAbsent(boat.getUniqueId(), key -> new CarState());
+        if (!state.captured) {
+            capture(boat, state);
+        }
 
         boat.setWorkOnLand(true);
+        neutralize(boat);
+
+        boolean forward = input.isForward();
+        boolean backward = input.isBackward();
+        boolean left = input.isLeft();
+        boolean right = input.isRight();
+        boolean handbrake = input.isSneak();
+        boolean drifting = input.isJump();
+        boolean boosting = input.isSprint();
+
+        double top = TOP_SPEED * (boosting ? BOOST_MULT : 1.0);
+        double speed = state.speed;
+
+        if (handbrake) {
+            speed = approach(speed, 0.0, HANDBRAKE_FORCE);
+        } else if (forward && !backward) {
+            if (speed < -0.02) {
+                speed = approach(speed, 0.0, BRAKE_FORCE);
+            } else {
+                double curve = 1.0 - Math.min(speed / top, 1.0);
+                speed += ACCEL * Math.max(0.25, curve);
+            }
+        } else if (backward && !forward) {
+            if (speed > 0.03) {
+                speed = approach(speed, 0.0, BRAKE_FORCE);
+            } else {
+                double curve = 1.0 - Math.min(-speed / MAX_REVERSE, 1.0);
+                speed -= ACCEL_REVERSE * Math.max(0.30, curve);
+            }
+        } else {
+            speed = approach(speed, 0.0, COAST_DECEL);
+        }
+
+        speed -= speed * DRAG;
+        if (Math.abs(speed) < 0.004 && !forward && !backward) {
+            speed = 0.0;
+        }
+        speed = clamp(speed, -MAX_REVERSE, top);
+
+        float yaw = normalizeYaw(boat.getLocation().getYaw());
+        double steer = (right ? 1.0 : 0.0) - (left ? 1.0 : 0.0);
+        double speedAbs = Math.abs(speed);
+        if (steer != 0.0 && speedAbs > 0.01) {
+            double agility = Math.min(1.0, speedAbs / 0.20);
+            double highSpeedCut = 1.0 - 0.5 * Math.min(1.0, speedAbs / top);
+            double rate = STEER_DEG * agility * highSpeedCut * (drifting ? 1.4 : 1.0);
+            yaw = normalizeYaw(yaw + (float) (steer * rate * (speed < 0.0 ? -1.0 : 1.0)));
+        }
+
+        Vector heading = yawToDirection(yaw);
+        Vector want = heading.clone().multiply(speed);
+
+        Vector current = boat.getVelocity().clone();
+        current.setY(0.0);
+
+        double grip = drifting ? DRIFT_GRIP : GRIP;
+        Vector horizontal = current.multiply(1.0 - grip).add(want.multiply(grip));
+
+        double rawVy = boat.getVelocity().getY();
+        double vy = resolveVertical(boat, heading, speedAbs, rawVy);
+
+        boat.setRotation(yaw, 0.0f);
+        horizontal.setY(vy);
+        boat.setVelocity(horizontal);
+
+        state.speed = speed;
+
+        if (forward && !handbrake && speed > 0.15) {
+            spawnExhaust(boat, heading, boat.getWorld());
+        }
+    }
+
+    private double resolveVertical(Boat boat, Vector heading, double speedAbs, double rawVy) {
+        if (boat.isOnGround()) {
+            return stepLift(boat, heading, speedAbs);
+        }
+        Boat.Status status = boat.getStatus();
+        if (status == Boat.Status.IN_WATER
+                || status == Boat.Status.UNDER_WATER
+                || status == Boat.Status.UNDER_FLOWING_WATER) {
+            return clamp(rawVy * 0.85 + 0.015, -0.12, 0.10);
+        }
+        return Math.max(rawVy - GRAVITY, -MAX_FALL);
+    }
+
+    private double stepLift(Boat boat, Vector heading, double speedAbs) {
+        if (speedAbs < 0.20) {
+            return 0.0;
+        }
+        Location probe = boat.getLocation().clone().add(heading.clone().multiply(1.0));
+        Block front = probe.getBlock();
+        Block head1 = probe.clone().add(0.0, 1.0, 0.0).getBlock();
+        Block head2 = probe.clone().add(0.0, 2.0, 0.0).getBlock();
+        if (!front.isPassable() && head1.isPassable() && head2.isPassable()) {
+            return STEP_LIFT;
+        }
+        return 0.0;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void capture(Boat boat, CarState state) {
+        state.maxSpeed = boat.getMaxSpeed();
+        state.occupiedDeceleration = boat.getOccupiedDeceleration();
+        state.unoccupiedDeceleration = boat.getUnoccupiedDeceleration();
+        state.workOnLand = boat.getWorkOnLand();
+        state.captured = true;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void neutralize(Boat boat) {
         boat.setMaxSpeed(0.0D);
         boat.setOccupiedDeceleration(0.0D);
         boat.setUnoccupiedDeceleration(0.0D);
-
-        Vector forward = yawToDirection(boat.getLocation().getYaw());
-        Vector right = new Vector(-forward.getZ(), 0.0, forward.getX());
-        Vector rawVelocity = boat.getVelocity();
-
-        double projectedSpeed = rawVelocity.clone().setY(0.0).dot(forward);
-        double currentSpeed = currentSpeeds.getOrDefault(boatId, projectedSpeed);
-        double throttleState = throttleStates.getOrDefault(boatId, 0.0);
-        double smoothedLateralVelocity = lateralVelocities.getOrDefault(boatId, 0.0);
-        float lockedYaw = lockedYaws.getOrDefault(boatId, normalizeYaw(boat.getLocation().getYaw()));
-
-        double throttleInput = input.forward() == input.backward() ? 0.0 : (input.forward() ? 1.0 : -1.0);
-        double throttleSmoothing = Math.abs(throttleInput) > 0.01 ? THROTTLE_RESPONSE : THROTTLE_RETURN;
-        throttleState += (throttleInput - throttleState) * throttleSmoothing;
-
-        if (Math.abs(throttleState) < 0.01 && Math.abs(throttleInput) < 0.01) {
-            throttleState = 0.0;
-        }
-
-        currentSpeed = integrateSpeed(currentSpeed, throttleState);
-
-        // Hard-lock the hull yaw so the boat never rotates, even when the rider turns the camera.
-        boat.setRotation(lockedYaw, 0.0f);
-        forward = yawToDirection(lockedYaw);
-        right = new Vector(-forward.getZ(), 0.0, forward.getX());
-
-        double lateralVelocity = rawVelocity.clone().setY(0.0).dot(right);
-        smoothedLateralVelocity += ((lateralVelocity * TRACTION) - smoothedLateralVelocity) * LATERAL_SMOOTHING;
-
-        Vector composedVelocity = forward.multiply(currentSpeed).add(right.multiply(smoothedLateralVelocity));
-        composedVelocity.setY(resolveVerticalVelocity(boat, rawVelocity));
-
-        if (Math.abs(currentSpeed) < 0.004 && Math.abs(smoothedLateralVelocity) < 0.004 && throttleState == 0.0) {
-            composedVelocity.multiply(LOW_SPEED_DAMPING);
-            currentSpeed = 0.0;
-            smoothedLateralVelocity = 0.0;
-        }
-
-        boat.setVelocity(composedVelocity);
-        currentSpeeds.put(boatId, currentSpeed);
-        throttleStates.put(boatId, throttleState);
-        lateralVelocities.put(boatId, smoothedLateralVelocity);
-        lockedYaws.put(boatId, lockedYaw);
-
-        if (throttleState > 0.20 && currentSpeed > 0.08) {
-            spawnExhaust(boat, forward, driver.getWorld());
-        }
     }
 
-    private double integrateSpeed(double currentSpeed, double throttleInput) {
-        if (throttleInput > 0.0) {
-            if (currentSpeed < -0.02) {
-                currentSpeed = Math.min(0.0, currentSpeed + forceToAcceleration(BRAKING_FORCE));
-            } else {
-                double torqueCurve = 1.0 - Math.min(Math.max(currentSpeed, 0.0) / TOP_SPEED, 1.0);
-                currentSpeed += forceToAcceleration(ENGINE_FORCE) * Math.max(0.20, torqueCurve);
-            }
-        } else if (throttleInput < 0.0) {
-            if (currentSpeed > 0.02) {
-                currentSpeed = Math.max(0.0, currentSpeed - forceToAcceleration(BRAKING_FORCE));
-            } else {
-                double reverseCurve = 1.0 - Math.min(Math.abs(currentSpeed) / MAX_REVERSE_SPEED, 1.0);
-                currentSpeed -= forceToAcceleration(REVERSE_ENGINE_FORCE) * Math.max(0.26, reverseCurve);
-            }
-        } else {
-            currentSpeed = applyPassiveLoss(currentSpeed);
+    @SuppressWarnings("deprecation")
+    private void restore(Boat boat) {
+        CarState state = states.remove(boat.getUniqueId());
+        if (state == null || !state.captured) {
+            return;
         }
-
-        currentSpeed = applyPassiveLoss(currentSpeed);
-        return clamp(currentSpeed, -MAX_REVERSE_SPEED, TOP_SPEED);
+        boat.setMaxSpeed(state.maxSpeed);
+        boat.setOccupiedDeceleration(state.occupiedDeceleration);
+        boat.setUnoccupiedDeceleration(state.unoccupiedDeceleration);
+        boat.setWorkOnLand(state.workOnLand);
     }
 
-    private double applyPassiveLoss(double speed) {
-        if (Math.abs(speed) < 0.0008) {
-            return 0.0;
-        }
-
-        double deceleration = (DRAG_COEFFICIENT + ROLLING_RESISTANCE) * TICK_SECONDS;
-        if (speed > 0.0) {
-            return Math.max(0.0, speed - deceleration);
-        }
-        return Math.min(0.0, speed + deceleration);
-    }
-
-    private double resolveVerticalVelocity(Boat boat, Vector rawVelocity) {
-        if (boat.getStatus() == Boat.Status.IN_WATER || boat.getStatus() == Boat.Status.UNDER_WATER || boat.getStatus() == Boat.Status.UNDER_FLOWING_WATER) {
-            return Math.max(rawVelocity.getY(), -0.08);
-        }
-        return Math.min(rawVelocity.getY(), 0.0);
+    private void pruneUnusedStates() {
+        states.entrySet().removeIf(entry -> plugin.getServer().getEntity(entry.getKey()) == null);
     }
 
     private void spawnExhaust(Boat boat, Vector forward, World world) {
@@ -210,24 +278,6 @@ public final class CarPhysics {
 
         world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, base.clone().add(backward).add(side), 1, 0.02, 0.02, 0.02, 0.0);
         world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, base.clone().add(backward).subtract(side), 1, 0.02, 0.02, 0.02, 0.0);
-    }
-
-    private void expireStaleInputs() {
-        long currentTick = plugin.getServer().getCurrentTick();
-        Iterator<Map.Entry<UUID, InputState>> iterator = playerInputs.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<UUID, InputState> entry = iterator.next();
-            if ((currentTick - entry.getValue().serverTick()) > INPUT_TIMEOUT_TICKS) {
-                iterator.remove();
-            }
-        }
-    }
-
-    private void pruneUnusedStates() {
-        currentSpeeds.entrySet().removeIf(entry -> plugin.getServer().getEntity(entry.getKey()) == null);
-        throttleStates.entrySet().removeIf(entry -> plugin.getServer().getEntity(entry.getKey()) == null);
-        lateralVelocities.entrySet().removeIf(entry -> plugin.getServer().getEntity(entry.getKey()) == null);
-        lockedYaws.entrySet().removeIf(entry -> plugin.getServer().getEntity(entry.getKey()) == null);
     }
 
     private static Vector yawToDirection(float yaw) {
@@ -248,17 +298,26 @@ public final class CarPhysics {
         return normalized;
     }
 
-    private static double forceToAcceleration(double force) {
-        return (force / MASS) * TICK_SECONDS;
+    private static double approach(double value, double target, double delta) {
+        if (value < target) {
+            return Math.min(target, value + delta);
+        }
+        if (value > target) {
+            return Math.max(target, value - delta);
+        }
+        return target;
     }
 
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
 
-    private record InputState(boolean forward, boolean backward, boolean left, boolean right, long serverTick) {
-        private static InputState idle(long serverTick) {
-            return new InputState(false, false, false, false, serverTick);
-        }
+    private static final class CarState {
+        private double speed;
+        private boolean captured;
+        private double maxSpeed;
+        private double occupiedDeceleration;
+        private double unoccupiedDeceleration;
+        private boolean workOnLand;
     }
 }
