@@ -2,10 +2,13 @@
 
 # 🐺 WolfMOD
 
-**Mod de corrida para Minecraft Bedrock e Java - Fabric**
+**Mod de corrida para Minecraft Java - Fabric, Quilt, NeoForge e Forge**
 
-[![Fabric](https://img.shields.io/badge/Fabric-1.21+-green.svg)](https://fabricmc.net)
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.3-blue.svg)](https://minecraft.net)
+[![Fabric](https://img.shields.io/badge/Fabric-1.21.4-green.svg)](https://fabricmc.net)
+[![Quilt](https://img.shields.io/badge/Quilt-1.21.4-blueviolet.svg)](https://quiltmc.org)
+[![NeoForge](https://img.shields.io/badge/NeoForge-1.21.4-orange.svg)](https://neoforged.net)
+[![Forge](https://img.shields.io/badge/Forge-1.21.4-8A8A8A.svg)](https://minecraftforge.net)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.4-blue.svg)](https://minecraft.net)
 [![License](https://img.shields.io/badge/License-Private-red.svg)](LICENSE)
 
 *[O mod que acompanha sua corrida]*
@@ -118,11 +121,13 @@ cp build/libs/wolfplugin-*.jar ../plugins/
 
 | Componente | Versão | Obrigatório |
 |------------|--------|-------------|
-| Minecraft | 1.21.3+ | ✅ Sim |
-| Fabric Loader | 0.16.9+ | ✅ Sim |
-| Fabric API | 0.106.1+ | ✅ Sim |
+| Minecraft | 1.21.4 | ✅ Sim |
 | Java | 21+ | ✅ Sim |
-| Paper (servidor) | 1.21+ | ✅ (WolfPlugin) |
+| Fabric Loader + Fabric API | 0.16.14+ / 0.119.4+ | para o jar do Fabric |
+| Quilt Loader + QFAPI | 0.28.1+ | para o jar do Quilt |
+| NeoForge | 21.4+ | para o jar do NeoForge |
+| Forge | 54+ | para o jar do Forge |
+| Paper (servidor) | 1.21.4+ | ✅ (WolfPlugin) |
 
 ---
 
@@ -210,57 +215,108 @@ O WolfMOD funciona em conjunto com o plugin FormulaRacing no servidor:
 
 ---
 
+## Loaders
+
+O mod é multi-loader. O código compartilhado fica em `common/` e cada loader tem
+um módulo que só registra os eventos que ele oferece.
+
+| Loader | Módulo | Biblioteca de eventos |
+|--------|--------|----------------------|
+| Fabric | `fabric/` | Fabric API |
+| Quilt | `quilt/` | QFAPI (fork do Fabric API) + mixin |
+| NeoForge | `neoforge/` | NeoForge events |
+| Forge | `forge/` | Forge events |
+
+O `common/` é compilado em **mappings Yarn** (igual era antes). O
+`architectury-plugin` remapeia o jar do `common` para Mojang/SRG ao gerar o jar de
+Forge e NeoForge — é por isso que o mesmo código-fonte roda nos quatro sem
+tradução. Nenhum arquivo do `common/` importa `net.fabricmc`, `net.neoforged`,
+`net.minecraftforge` ou `org.quiltmc`: o que precisa de API de loader vira facade
+em `common/src/main/java/dev/EfraGroup/wolfmod/platform/`.
+
+### Status de verificação
+
+Esta modularização foi feita sem conseguir compilar (a máquina tem 3 GB de RAM e
+4 GB de disco; Loom e o ForgeGradle precisam de muito mais). O que **foi**
+verificado:
+
+- `common/` não tem nenhuma dependência de API de loader (checado por grep);
+- todos os imports `dev.EfraGroup.*` resolvem para arquivos que existem;
+- todos os 51 arquivos Java passam no parser do `javac` sem erro de sintaxe
+  (rodando sem classpath, então sobram só "cannot find symbol").
+
+O que **não** foi verificado: se cada módulo compila de fato, e em especial:
+
+- **`forge/`** é o ponto de maior risco. Não existe `architectury-forge` para
+  1.21.4 (o último release é `11.1.17`, do 1.20.6/1.21), então esse módulo usa
+  o transformer do plugin sem a API do Architectury. Se o `architectury { forge() }`
+  não estiver pronto para o Forge 54, esse é o primeiro lugar a olhar.
+- `quilt/`: a versão do `quilted-fabric-api` para 1.21.4 não aparece no mirror do
+  maven do Quilt — está isolada em `gradle.properties`.
+- `quilt/`: o QFAPI não tem `HudRenderCallback` nem `WorldRenderEvents`. Ambos
+  foram cobertos por mixin (`DrawContextMixin`, `WorldRendererMixin`), e a
+  assinatura de `WorldRenderer.render` é o ponto mais frágil do porte.
+- `neoforge/` e `forge/`: os eventos de HUD, render de mundo e tela de pausa foram
+  escritos de memória contra a API de cada loader.
+
+Nenhuma funcionalidade foi perdida na migração: a lista de recursos do Fabric
+antes da mudança é a mesma depois.
+
 ## Desenvolvimento
 
 ### Estrutura
 
 ```
 WolfMOD/
-├── src/                        # Mod Fabric (cliente)
-│   ├── client/
-│   │   ├── java/dev/EfraGroup/wolfmod/client/
-│   │   │   ├── commands/      # Comandos do cliente
-│   │   │   ├── ghost/         # Sistema de ghost
-│   │   │   ├── hud/           # Interface HUD
-│   │   │   ├── radio/         # Sistema de radio
-│   │   │   ├── vehicle/       # Controle de veículo
-│   │   │   └── WolfmodClient.java
-│   │   └── resources/         # Mixins e assets
-│   └── main/
-│       └── java/dev/EfraGroup/wolfmod/
-│           ├── network/       # Pacotes de rede
-│           └── Wolfmod.java
-├── wolfplugin/                 # Plugin Paper (servidor)
-│   └── src/main/java/dev/EfraGroup/wolfplugin/
-│       ├── WolfPlugin.java    # Handshake e comunicação
-│       ├── vehicle/
-│       │   └── CarPhysics.java # Física de carro realista
-│       └── utils/
-│           └── VarIntUtils.java # Codificação de mensagens
-└── Wolfmod.java
+├── common/                        # Código compartilhado (mappings Yarn)
+│   └── src/main/
+│       ├── java/dev/EfraGroup/wolfmod/
+│       │   ├── Wolfmod.java
+│       │   ├── client/
+│       │   │   ├── WolfClient.java   # Orquestra o client (tick, HUD, rede)
+│       │   │   ├── ServerInfoManager.java
+│       │   │   ├── TimeTrial/       # Timer, geometria e sweeping de região
+│       │   │   ├── ghost/           # Ghost: dados, playback, render
+│       │   │   ├── hud/             # HUD, fastest lap, tela de pausa
+│       │   │   ├── radio/           # Rádio, Vosk, NIM API
+│       │   │   └── vehicle/         # CarPhysics e estado visual do barco
+│       │   ├── network/             # WolfConfig, GhostData e Radio payloads
+│       │   ├── platform/            # Facades (rede, comandos, mod list)
+│       │   └── mixin/client/        # Mixin do renderer de barco
+│       └── resources/
+│           ├── assets/wolfmod/      # Ícones, lang, texturas
+│           ├── wolfmod.accesswidener
+│           ├── wolfmod.mixins.json
+│           └── wolfmod.client.mixins.json
+├── fabric/src/main/                # Entry points + wiring do Fabric API
+├── neoforge/src/main/              # Entry points + wiring do NeoForge
+├── quilt/src/main/                 # Entry points + mixins do HUD/render
+├── forge/src/main/                 # Entry points + wiring do Forge
+└── wolfplugin/                     # Plugin Paper (servidor) — build separado
+    └── src/main/java/dev/EfraGroup/wolfplugin/
 ```
 
 ### Build
 
-**Mod Fabric:**
 ```bash
-# Build completo
-./gradlew build
+# Um loader por vez (o build completo tenta os quatro)
+./gradlew :fabric:build
+./gradlew :neoforge:build
+./gradlew :quilt:build
+./gradlew :forge:build
 
-# Apenas client
-./gradlew buildClient
+# O Forge precisa de 6-8 GB livres para decompilar o Minecraft.
+# Em máquina apertada, pule o módulo:
+./gradlew build -PskipForge
 
-# Gerar fontes
-./gradlew genSources
-
-# Executar client de teste
-./gradlew runClient
+# Rodar o client de teste
+./gradlew :fabric:runClient
 ```
 
-**WolfPlugin (Paper):**
+**WolfPlugin (Paper)** — build separado, com o próprio `settings.gradle`:
 ```bash
 cd wolfplugin
-./gradlew build
+../gradlew build
 # JAR estará em wolfplugin/build/libs/
 ```
 
@@ -287,6 +343,7 @@ dependencies {
 - **Vosk** - Reconhecimento de voz offline
 - **NIM API** - Processamento de áudio
 - **Yarn Mappings** - Mappings de código aberto
+- **Architectury Plugin / Loom** - Multi-loader e remapeamento do `common`
 
 ---
 

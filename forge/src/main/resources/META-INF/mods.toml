@@ -1,0 +1,35 @@
+modLoader = "javafml"
+loaderVersion = "[49,)"
+license = "All-Rights-Reserved"
+issueTrackerURL = "https://github.com/EfraGamer300/WolfMOD/issues"
+
+[[mods]]
+modId = "wolfnod"
+version = "${version}"
+displayName = "WolfNod"
+description = '''
+The official mod for WolfNetwork.
+'''
+authors = "EfraMLG, WolfNetwork team"
+displayURL = "https://wolfnetwork.com.br"
+logoFile = "assets/wolfmod/icon.png"
+
+[[mixins]]
+config = "wolfmod.mixins.json"
+
+[[mixins]]
+config = "wolfmod.client.mixins.json"
+
+[[dependencies.wolfnod]]
+modId = "forge"
+mandatory = true
+versionRange = "[54,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.wolfnod]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.21.4,1.21.5)"
+ordering = "NONE"
+side = "CLIENT"

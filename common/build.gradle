@@ -1,0 +1,23 @@
+// Codigo compartilhado por Fabric, Quilt, NeoForge e Forge.
+//
+// Aqui NAO existe nenhuma import de net.fabricmc / net.neoforged /
+// net.minecraftforge / org.quiltmc. O que precisa de API de loader vive em
+// dev.EfraGroup.wolfmod.platform e e instalado pelo modulo de cada loader.
+
+architectury {
+    common rootProject.enabled_platforms.split(',')
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/wolfmod.accesswidener')
+}
+
+dependencies {
+    // So a annotation @Environment do Fabric Loader, que o plugin remapeia para
+    // OnlyIn/Dist nos outros loaders. Nada mais deste artefato e usado.
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+
+    // Vosk so e usado pelo LocalTranscriber (radio). Fica compileOnly porque o
+    // empacotamento das libs nativas e por loader - cada modulo declara do seu jeito.
+    compileOnly "com.alphacephei:vosk:${rootProject.vosk_version}"
+}

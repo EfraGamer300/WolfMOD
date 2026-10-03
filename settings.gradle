@@ -1,9 +1,26 @@
 pluginManagement {
     repositories {
-        maven {
-            name = 'Fabric'
-            url = 'https://maven.fabricmc.net/'
-        }
+        maven { url 'https://maven.fabricmc.net/' }
+        maven { url 'https://maven.architectury.dev/' }
+        maven { url 'https://maven.neoforged.net/releases' }
+        maven { url 'https://maven.minecraftforge.net/' }
+        maven { url 'https://maven.quiltmc.org/repository/release' }
         gradlePluginPortal()
     }
+}
+
+rootProject.name = 'WolfMOD'
+
+// O :common e o codigo compartilhado. Os quatro modulos de loader apenas
+// registram os eventos que o seu loader oferece e chamam o WolfClient.
+include 'common'
+include 'fabric'
+include 'neoforge'
+include 'quilt'
+
+// O Forge usa o transformer do Architectury sem a API (nao existe
+// architectury-forge para 1.21.4), entao ele entra por ultimo e pode ser
+// desativado com -PskipForge, igual ao BoatHudReforged.
+if (gradle.startParameter.projectProperties['skipForge'] == null) {
+    include 'forge'
 }

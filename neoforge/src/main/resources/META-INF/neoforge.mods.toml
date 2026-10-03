@@ -1,0 +1,36 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "All-Rights-Reserved"
+issueTrackerURL = "https://github.com/EfraGamer300/WolfMOD/issues"
+
+[[mods]]
+modId = "wolfnod"
+version = "${version}"
+displayName = "WolfNod"
+description = '''
+The official mod for WolfNetwork.
+'''
+authors = "EfraMLG, WolfNetwork team"
+displayURL = "https://wolfnetwork.com.br"
+logoFile = "assets/wolfmod/icon.png"
+
+[[mixins]]
+config = "wolfmod.mixins.json"
+
+[[mixins]]
+config = "wolfmod.client.mixins.json"
+
+# O mixin do AbstractBoatEntityRenderer so roda no client.
+[[dependencies.wolfnod]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.4.0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.wolfnod]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.4,1.21.5)"
+ordering = "NONE"
+side = "CLIENT"

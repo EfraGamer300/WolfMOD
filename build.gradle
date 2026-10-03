@@ -1,109 +1,65 @@
+// Configuracao compartilhada pelos cinco modulos.
+//
+// O :common e compilado em mappings YARN. O architectury-plugin le o jar
+// "namedElements" do :common e gera, para cada plataforma, uma versao
+// transformada (transformProduction*) com os nomes do loader alvo. E por isso que
+// o mesmo codigo-fonte roda em Fabric, Quilt, NeoForge e Forge sem translation.
+
 plugins {
-    id 'fabric-loom' version '1.15-SNAPSHOT'
-    id 'maven-publish'
+    id 'dev.architectury.loom' version "${architectury_loom_version}" apply false
+    id 'architectury-plugin' version "${architectury_plugin_version}"
+    id 'com.github.johnrengelman.shadow' version "${shadow_version}" apply false
 }
 
-version = project.mod_version
-group = project.maven_group
-
-base {
-    archivesName = project.archives_base_name
+architectury {
+    minecraft = project.minecraft_version
 }
 
-loom {
-    splitEnvironmentSourceSets()
+allprojects {
+    group = rootProject.maven_group
+    version = rootProject.mod_version
+}
 
-    mods {
-        "wolfnod" {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
+subprojects {
+    apply plugin: 'dev.architectury.loom'
+    apply plugin: 'architectury-plugin'
+    apply plugin: 'maven-publish'
+
+    base {
+        // wolfmod-fabric, wolfmod-neoforge, ...
+        archivesName = "${rootProject.archives_name}-${project.name}"
+    }
+
+    loom {
+        accessWidenerPath = project(':common').file('src/main/resources/wolfmod.accesswidener')
+
+        mixin {
+            defaultRefmapName = "wolfnod-refmap.json"
         }
     }
 
-    // ADICIONE ESTE BLOCO AQUI:
-    mixin {
-        defaultRefmapName = "wolfnod-refmap.json"
+    dependencies {
+        minecraft "net.minecraft:minecraft:${rootProject.minecraft_version}"
+        mappings "net.fabricmc:yarn:${rootProject.yarn_mappings}:v2"
     }
-}
 
-fabricApi {
-    configureDataGeneration {
-        client = true
+    java {
+        withSourcesJar()
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
-}
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    // To change the versions see the gradle.properties file
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
-    implementation 'com.alphacephei:vosk:0.3.45'
-    include 'com.alphacephei:vosk:0.3.45'
-}
-
-processResources {
-    inputs.property "version", project.version
-    inputs.property "minecraft_version", project.minecraft_version
-    inputs.property "loader_version", project.loader_version
-    filteringCharset "UTF-8"
-
-    filesMatching("fabric.mod.json") {
-        expand "version": project.version,
-                "minecraft_version": project.minecraft_version,
-                "loader_version": project.loader_version
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = 21
     }
-}
 
-def targetJavaVersion = 21
-tasks.withType(JavaCompile).configureEach {
-    // ensure that the encoding is set to UTF-8, no matter what the system default is
-    // this fixes some edge cases with special characters not displaying correctly
-    // see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
-    // If Javadoc is generated, this must be specified in that task too.
-    it.options.encoding = "UTF-8"
-    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
-        it.options.release.set(targetJavaVersion)
-    }
-}
-
-java {
-    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
-    if (JavaVersion.current() < javaVersion) {
-        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
-    }
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
-    withSourcesJar()
-}
-
-jar {
-    from("LICENSE.txt") {
-        rename { "${it}_${project.archives_base_name}" }
-    }
-}
-
-// configure the maven publication
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                artifactId = base.archivesName.get()
+                from components.java
+            }
         }
-    }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
     }
 }

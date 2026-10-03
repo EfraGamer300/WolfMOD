@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "quilt_loader": {
+    "group": "dev.EfraGroup",
+    "id": "wolfnod",
+    "version": "${version}",
+    "environment": "client",
+    "metadata": {
+      "name": "WolfNod",
+      "description": "The official mod for WolfNetwork.",
+      "contributors": {
+        "EfraMLG": "Owner",
+        "WolfNetwork team": "Team"
+      },
+      "contact": {
+        "homepage": "https://wolfnetwork.com.br",
+        "sources": "https://github.com/EfraGamer300/WolfMOD"
+      },
+      "license": "All-Rights-Reserved",
+      "icon": "assets/wolfmod/icon.png"
+    },
+    "intermediate_mappings": "net.fabricmc:intermediary"
+  },
+  "entrypoints": {
+    "init": [
+      "dev.EfraGroup.wolfmod.quilt.WolfmodQuilt"
+    ],
+    "client": [
+      "dev.EfraGroup.wolfmod.quilt.WolfmodQuiltClient"
+    ]
+  },
+  "mixin": [
+    "wolfmod.mixins.json",
+    "wolfmod.quilt.mixins.json"
+  ],
+  "access_widener": "wolfmod.accesswidener",
+  "depends": [
+    {
+      "id": "quilt_loader",
+      "versions": ">=0.28.0"
+    },
+    {
+      "id": "quilted_fabric_api",
+      "versions": "*"
+    },
+    {
+      "id": "minecraft",
+      "versions": "1.21.4"
+    }
+  ]
+}

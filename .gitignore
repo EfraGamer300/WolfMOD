@@ -1,17 +1,27 @@
+# Gradle
 .gradle/
 build/
 out/
 bin/
 tmp/
+run/
+runs/
+.architectury-transformer/
+
+# IDE
 .idea/
 *.iml
 *.ipr
 *.iws
+.vscode/
 .superpowers/
 .claude/
-run/
-txt.txt
 
-# OS
+# Sistema
 Thumbs.db
 .DS_Store
+
+# Nao versionar
+txt.txt
+.env
+.env.*

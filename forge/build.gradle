@@ -1,0 +1,66 @@
+plugins {
+    id 'com.github.johnrengelman.shadow'
+}
+
+architectury {
+    platformSetupLoomIde()
+    forge()
+}
+
+configurations {
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentForge.extendsFrom common
+
+    shadowCommon {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
+loom {
+    forge {
+        convertAccessWideners = true
+    }
+}
+
+repositories {
+    maven { url = 'https://maven.minecraftforge.net/' }
+    maven { url = 'https://maven.minecraftforge.net/' }
+}
+
+dependencies {
+    forge "net.minecraftforge:forge:${rootProject.forge_version}"
+
+    // NAO existe architectury-forge para 1.21.4 (o ultimo release e 11.1.17, do
+    // 1.20.6/1.21). Por isso o :forge nao depende da API do Architectury e
+    // escreve tudo contra as classes do proprio Forge. O que ele usa do plugin e
+    // so o transformer, que gera transformProductionForge a partir do
+    // namedElements do :common.
+
+    implementation "com.alphacephei:vosk:${rootProject.vosk_version}"
+
+    common(project(path: ':common', configuration: 'namedElements')) { transitive false }
+    shadowCommon project(path: ':common', configuration: 'transformProductionForge')
+}
+
+processResources {
+    inputs.property 'version', project.version
+
+    filesMatching('META-INF/mods.toml') {
+        expand 'version': project.version
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowCommon]
+    archiveClassifier = 'dev-shadow'
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+}

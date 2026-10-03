@@ -1,0 +1,58 @@
+plugins {
+    id 'com.github.johnrengelman.shadow'
+}
+
+architectury {
+    platformSetupLoomIde()
+    fabric()
+}
+
+configurations {
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentFabric.extendsFrom common
+
+    // Entra no jar final via shadow (o common transformed).
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+
+    // O modulo :fabric nao usa a API do Architectury ( WolfNetwork/WolfModList
+    // sao facades proprias), mas ela e util para rodar o Architectury API no
+    // cliente. Comente a linha se nao quiser a dependencia.
+    modImplementation "dev.architectury:architectury-fabric:${rootProject.architectury_api_version}"
+
+    // Vosk: mesma combinacao do build antigo - no classpath e bundled (JiJ).
+    implementation "com.alphacephei:vosk:${rootProject.vosk_version}"
+    include "com.alphacephei:vosk:${rootProject.vosk_version}"
+
+    common(project(path: ':common', configuration: 'namedElements')) { transitive false }
+    shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
+}
+
+processResources {
+    inputs.property 'version', project.version
+
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowBundle]
+    archiveClassifier = 'dev-shadow'
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+}
