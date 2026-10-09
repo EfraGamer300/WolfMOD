@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "wolfnod-refmap.json",
   "client": [
-    "AbstractBoatEntityRendererMixin"
+    "AbstractBoatEntityRendererMixin",
+    "BoatEntityRenderStateMixin",
+    "BoatEntityRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

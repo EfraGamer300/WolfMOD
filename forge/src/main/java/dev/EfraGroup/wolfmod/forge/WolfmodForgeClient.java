@@ -172,7 +172,7 @@ public final class WolfmodForgeClient {
             return;
         }
         WolfClient.renderGhost(event.getPoseStack(), event.getLevelRenderer().renderBuffers().bufferSource(),
-                event.getCamera());
+                event.getCamera(), event.getPartialTick());
     }
 
     @SubscribeEvent

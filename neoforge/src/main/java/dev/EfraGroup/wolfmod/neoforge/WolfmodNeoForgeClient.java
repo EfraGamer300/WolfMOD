@@ -25,7 +25,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
@@ -54,7 +54,7 @@ public final class WolfmodNeoForgeClient {
         NeoForge.EVENT_BUS.addListener(WolfmodNeoForgeClient::onClientLoggingIn);
         NeoForge.EVENT_BUS.addListener(WolfmodNeoForgeClient::onClientLoggingOut);
         NeoForge.EVENT_BUS.addListener(WolfmodNeoForgeClient::onRegisterCommands);
-        NeoForge.EVENT_BUS.addListener(WolfmodNeoForgeClient::onRenderFramePre);
+        NeoForge.EVENT_BUS.addListener(WolfmodNeoForgeClient::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(WolfmodNeoForgeClient::onScreenRenderPost);
     }
 
@@ -164,8 +164,12 @@ public final class WolfmodNeoForgeClient {
         };
     }
 
-    private static void onRenderFramePre(RenderFrameEvent.Pre event) {
-        WolfClient.renderGhost(event.getMatrixStack(), event.getRenderBuffers().getBufferSource(), event.getCamera());
+    private static void onRenderLevelStage(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
+            return;
+        }
+        WolfClient.renderGhost(event.getPoseStack(), event.getLevelRenderer().renderBuffers().bufferSource(),
+                event.getCamera(), event.getPartialTick());
     }
 
     private static void onScreenRenderPost(ScreenEvent.Render.Post event) {

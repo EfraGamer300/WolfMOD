@@ -17,30 +17,38 @@ public final class GhostRenderer {
     private static final float GHOST_ALPHA = 0.50f;
 
     private static ClientWorld cachedWorld;
-    private static GhostBoat ghostBoat;
     private static GhostPlayer ghostRider;
 
     private GhostRenderer() {}
 
-    public static void render(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera) {
+    /**
+     * Render manual apenas do piloto falso. O barco ghost e uma entidade
+     * real no client world (ver {@link GhostManagerClient#tickGhost}) e e
+     * desenhado pelo vanilla com transparencia via mixin.
+     */
+    public static void render(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera, float tickDelta) {
         if (!ServerInfoManager.isOnWolfNetwork()) return;
         MinecraftClient client = MinecraftClient.getInstance();
-        GhostPose pose = GhostManagerClient.currentPose();
+        if (client.world == null) return;
+        GhostPose pose = GhostManagerClient.currentPose((int) client.world.getTime(), tickDelta);
 
         if (pose == null || client.world == null || client.player == null || consumers == null || matrices == null || camera == null) {
             return;
         }
 
         ensureEntities(client);
-        if (ghostBoat == null || ghostRider == null) {
+        if (ghostRider == null) {
             return;
         }
 
-        syncEntity(ghostBoat, pose.x(), pose.y(), pose.z(), pose.yaw(), 0.0f);
+        GhostBoat boat = GhostManagerClient.getBoat();
         syncEntity(ghostRider, pose.x(), pose.y(), pose.z(), pose.yaw(), pose.pitch());
-        mountRider();
-        ghostBoat.setPaddlesMoving(true, true);
-        ghostBoat.syncPassenger(ghostRider);
+        if (boat != null) {
+            if (ghostRider.getVehicle() != boat) {
+                ghostRider.startRiding(boat, true);
+            }
+            boat.syncPassenger(ghostRider);
+        }
         ghostRider.setPose(EntityPose.SITTING);
 
         EntityRenderDispatcher dispatcher = client.getEntityRenderDispatcher();
@@ -49,7 +57,6 @@ public final class GhostRenderer {
 
         dispatcher.configure(client.world, camera, client.player);
         dispatcher.setRenderShadows(false);
-        renderGhostEntity(ghostBoat, matrices, dispatcher, cameraPos, translucentConsumers);
         renderGhostEntity(ghostRider, matrices, dispatcher, cameraPos, translucentConsumers);
         dispatcher.setRenderShadows(true);
     }
@@ -64,20 +71,15 @@ public final class GhostRenderer {
     private static void ensureEntities(MinecraftClient client) {
         if (client.world == null || client.player == null) {
             cachedWorld = null;
-            ghostBoat = null;
             ghostRider = null;
             return;
         }
 
-        if (client.world == cachedWorld && ghostBoat != null && ghostRider != null) {
+        if (client.world == cachedWorld && ghostRider != null) {
             return;
         }
 
         cachedWorld = client.world;
-        ghostBoat = new GhostBoat(client.world);
-        ghostBoat.setNoGravity(true);
-        ghostBoat.noClip = true;
-        ghostBoat.setSilent(true);
 
         ghostRider = new GhostPlayer(client.world);
         ghostRider.setNoGravity(true);
@@ -107,16 +109,6 @@ public final class GhostRenderer {
         }
     }
 
-    private static void mountRider() {
-        if (ghostBoat == null || ghostRider == null) {
-            return;
-        }
-
-        if (ghostRider.getVehicle() != ghostBoat) {
-            ghostRider.startRiding(ghostBoat, true);
-        }
-    }
-
     private record AlphaVertexConsumerProvider(VertexConsumerProvider delegate, float alphaScale) implements VertexConsumerProvider {
         @Override
         public VertexConsumer getBuffer(RenderLayer layer) {
@@ -133,7 +125,10 @@ public final class GhostRenderer {
 
         @Override
         public VertexConsumer color(int red, int green, int blue, int alpha) {
-            delegate.color(red, green, blue, Math.round(alpha * alphaScale));
+            int r = Math.min(255, red + (255 - red) / 2);
+            int g = Math.min(255, green + (255 - green) / 2);
+            int b = blue / 4;
+            delegate.color(r, g, b, Math.round(alpha * alphaScale));
             return this;
         }
 

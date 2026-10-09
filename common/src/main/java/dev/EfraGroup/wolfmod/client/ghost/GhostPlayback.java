@@ -7,14 +7,16 @@ public final class GhostPlayback {
     private volatile GhostData ghostData;
     private volatile boolean active;
     private volatile int frameIndex;
+    private volatile int startWorldTick;
 
     public void setGhostData(GhostData ghostData) {
         this.ghostData = ghostData;
         this.frameIndex = 0;
     }
 
-    public void start() {
+    public void start(int worldTick) {
         this.frameIndex = 0;
+        this.startWorldTick = worldTick;
         this.active = ghostData != null && ghostData.frameCount() > 0;
     }
 
@@ -29,7 +31,7 @@ public final class GhostPlayback {
         this.ghostData = null;
     }
 
-    public GhostPose samplePose() {
+    public GhostPose samplePose(int currentWorldTick, float tickDelta) {
         if (!active) {
             return null;
         }
@@ -39,7 +41,7 @@ public final class GhostPlayback {
             return null;
         }
 
-        float targetTick = Timer.getElapsedMillis() / 50.0f;
+        float targetTick = (currentWorldTick - startWorldTick) + tickDelta;
         int frameCount = data.frameCount();
         if (frameCount == 0) {
             return null;

@@ -82,6 +82,7 @@ public final class WolfClient {
         if (client.world != null && !client.isPaused()) {
             Timer.update();
             FastestLap.tick();
+            GhostManagerClient.tickGhost(client);
         }
     }
 
@@ -101,8 +102,8 @@ public final class WolfClient {
     }
 
     /** Ghost, desenhado no mundo depois das entidades. */
-    public static void renderGhost(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera) {
-        GhostRenderer.render(matrices, consumers, camera);
+    public static void renderGhost(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera, float tickDelta) {
+        GhostRenderer.render(matrices, consumers, camera, tickDelta);
     }
 
     public static void startRadioRecording() {

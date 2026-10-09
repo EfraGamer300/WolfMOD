@@ -33,6 +33,6 @@ public class WorldRendererMixin {
             VertexConsumerProvider consumers,
             CallbackInfo ci
     ) {
-        WolfClient.renderGhost(matrices, consumers, camera);
+        WolfClient.renderGhost(matrices, consumers, camera, tickDelta);
     }
 }

@@ -39,6 +39,21 @@ public final class GhostBoat extends BoatEntity {
         return ActionResult.PASS;
     }
 
+    /**
+     * O ghost agora e uma entidade real no client world (renderizado pelo
+     * vanilla com interpolacao de tickDelta), mas nao pode interagir
+     * fisicamente com o jogador: sem push e sem colisao.
+     */
+    @Override
+    public boolean isPushable() {
+        return false;
+    }
+
+    @Override
+    public boolean collidesWith(Entity entity) {
+        return false;
+    }
+
     public void syncPassenger(Entity passenger) {
         EntityDimensions dimensions = passenger.getDimensions(passenger.getPose());
         Vec3d attachment = getPassengerAttachmentPos(passenger, dimensions, 1.0f);

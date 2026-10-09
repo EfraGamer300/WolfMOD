@@ -175,7 +175,7 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
                 WolfClient.renderFastestLap(drawContext));
 
         WorldRenderEvents.AFTER_ENTITIES.register(context ->
-                WolfClient.renderGhost(context.matrixStack(), context.consumers(), context.camera()));
+                WolfClient.renderGhost(context.matrixStack(), context.consumers(), context.camera(), context.tickDelta()));
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (screen instanceof net.minecraft.client.gui.screen.GameMenuScreen) {
