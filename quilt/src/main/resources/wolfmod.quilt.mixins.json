@@ -5,8 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "wolfnod-refmap.json",
   "client": [
-    "DrawContextMixin",
-    "WorldRendererMixin"
+    "DrawContextMixin"
   ],
   "injectors": {
     "defaultRequire": 1

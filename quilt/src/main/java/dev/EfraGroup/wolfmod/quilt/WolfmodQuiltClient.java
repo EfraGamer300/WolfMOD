@@ -39,8 +39,9 @@ import org.lwjgl.glfw.GLFW;
  * classes do Fabric API direto.
  *
  * Os dois pontos que o QFAPI nao cobre sao HUD e render de mundo: no Fabric eles
- * vem de HudRenderCallback e WorldRenderEvents. Aqui eles sao cobertos por mixin
- * (DrawContextMixin e WorldRendererMixin), que chamam o mesmo WolfClient.
+ * vem de HudRenderCallback e WorldRenderEvents. O HUD e coberto por mixin
+ * (DrawContextMixin); o ghost agora e entidade real no mundo, renderizado
+ * pelo vanilla, sem hook de render dedicado.
  */
 public final class WolfmodQuiltClient {
     private static KeyBinding radioKeyBinding;

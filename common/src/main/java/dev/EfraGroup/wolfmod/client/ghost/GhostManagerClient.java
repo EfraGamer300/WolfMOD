@@ -11,6 +11,8 @@ public final class GhostManagerClient {
 
     private static GhostBoat boatEntity;
     private static ClientWorld boatWorld;
+    private static GhostPlayer riderEntity;
+    private static ClientWorld riderWorld;
 
     private GhostManagerClient() {
     }
@@ -44,11 +46,13 @@ public final class GhostManagerClient {
     public static void stopPlayback() {
         PLAYBACK.stop();
         discardBoat();
+        discardRider();
     }
 
     public static void clearGhost() {
         PLAYBACK.clear();
         discardBoat();
+        discardRider();
     }
 
     public static boolean toggleEnabled() {
@@ -56,28 +60,13 @@ public final class GhostManagerClient {
         if (!enabled) {
             PLAYBACK.stop();
             discardBoat();
+            discardRider();
         }
         return enabled;
     }
 
     public static boolean isEnabled() {
         return enabled;
-    }
-
-    public static GhostPose currentPose(int worldTick, float tickDelta) {
-        if (!enabled) {
-            return null;
-        }
-        return PLAYBACK.samplePose(worldTick, tickDelta);
-    }
-
-    /**
-     * Entidade real do barco ghost no client world (espelha o BoatLabs).
-     * O vanilla renderiza e interpola com tickDelta, sem o glitch do
-     * render manual relativo a camera. Criada sob demanda no tick.
-     */
-    public static GhostBoat getBoat() {
-        return boatEntity;
     }
 
     /** Chamado no fim do client tick: posiciona o barco a partir do playback. */
@@ -101,6 +90,31 @@ public final class GhostManagerClient {
         boatEntity.setPosition(pose.x(), pose.y(), pose.z());
         boatEntity.setYaw(pose.yaw());
         boatEntity.setPaddlesMoving(true, true);
+        tickRider(client, pose);
+    }
+
+    /**
+     * Piloto falso como entidade real (espelha o BoatLabs): anda montado no
+     * barco para os remos animarem, mas a posicao e forcada por tick no
+     * assento (barco - altura) com yaw/pitch da gravacao.
+     */
+    private static void tickRider(MinecraftClient client, GhostPose pose) {
+        if (boatEntity == null || client.world == null) {
+            return;
+        }
+        if (riderEntity == null || riderWorld != client.world) {
+            discardRider();
+            riderWorld = client.world;
+            riderEntity = new GhostPlayer(client.world);
+            riderEntity.setNoGravity(true);
+            riderEntity.noClip = true;
+            riderEntity.setSilent(true);
+            client.world.addEntity(riderEntity);
+            riderEntity.startRiding(boatEntity, true);
+        }
+        riderEntity.setPosition(pose.x(), pose.y() - boatEntity.getHeight(), pose.z());
+        riderEntity.setYaw(pose.yaw());
+        riderEntity.setPitch(pose.pitch());
     }
 
     private static void discardBoat() {
@@ -109,5 +123,13 @@ public final class GhostManagerClient {
             boatEntity = null;
         }
         boatWorld = null;
+    }
+
+    private static void discardRider() {
+        if (riderEntity != null) {
+            riderEntity.discard();
+            riderEntity = null;
+        }
+        riderWorld = null;
     }
 }

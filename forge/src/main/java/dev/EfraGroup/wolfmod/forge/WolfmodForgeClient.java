@@ -23,7 +23,6 @@ import net.minecraft.text.Text;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -164,15 +163,6 @@ public final class WolfmodForgeClient {
                 src.sendSuccess(() -> text, false);
             }
         };
-    }
-
-    @SubscribeEvent
-    public static void onRenderLevelStage(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
-            return;
-        }
-        WolfClient.renderGhost(event.getPoseStack(), event.getLevelRenderer().renderBuffers().bufferSource(),
-                event.getCamera(), event.getPartialTick());
     }
 
     @SubscribeEvent

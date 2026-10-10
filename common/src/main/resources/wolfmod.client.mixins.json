@@ -7,7 +7,9 @@
   "client": [
     "AbstractBoatEntityRendererMixin",
     "BoatEntityRenderStateMixin",
-    "BoatEntityRendererMixin"
+    "BoatEntityRendererMixin",
+    "LivingEntityRendererMixin",
+    "PlayerEntityRenderStateMixin"
   ],
   "injectors": {
     "defaultRequire": 1

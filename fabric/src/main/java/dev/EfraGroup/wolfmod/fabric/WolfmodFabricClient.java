@@ -20,7 +20,6 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.loader.api.FabricLoader;
@@ -173,9 +172,6 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) ->
                 WolfClient.renderFastestLap(drawContext));
-
-        WorldRenderEvents.AFTER_ENTITIES.register(context ->
-                WolfClient.renderGhost(context.matrixStack(), context.consumers(), context.camera(), context.tickDelta()));
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (screen instanceof net.minecraft.client.gui.screen.GameMenuScreen) {

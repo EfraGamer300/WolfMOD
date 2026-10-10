@@ -4,8 +4,8 @@ import com.mojang.brigadier.CommandDispatcher;
 import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
 import dev.EfraGroup.wolfmod.client.TimeTrial.WolfTimingClient;
 import dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient;
-import dev.EfraGroup.wolfmod.client.ghost.GhostRenderer;
 import dev.EfraGroup.wolfmod.client.hud.FastestLap;
+import dev.EfraGroup.wolfmod.client.pack.PackSync;
 import dev.EfraGroup.wolfmod.client.hud.Hud;
 import dev.EfraGroup.wolfmod.client.hud.PauseHud;
 import dev.EfraGroup.wolfmod.client.radio.RadioManager;
@@ -20,9 +20,6 @@ import com.mojang.brigadier.context.CommandContext;
 import java.util.function.Function;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Text;
 
 /**
@@ -41,6 +38,7 @@ public final class WolfClient {
     /** Chamado uma vez no boot do client. */
     public static void bootstrap() {
         RadioSettings.load();
+        PackSync.checkForUpdatesAsync();
     }
 
     public static WolfTimingClient timing() {
@@ -75,6 +73,7 @@ public final class WolfClient {
     /** Fim de tick do client. */
     public static void endTick() {
         MinecraftClient client = MinecraftClient.getInstance();
+        PackSync.tickLaunchApply(client);
         CarPhysics.tick(client);
         if (timingClient != null) {
             timingClient.tick(client);
@@ -99,11 +98,6 @@ public final class WolfClient {
     /** HUD extra da tela de pausa (ESC). */
     public static void renderPauseHud(DrawContext context, float tickDelta) {
         PauseHud.render(context, tickDelta);
-    }
-
-    /** Ghost, desenhado no mundo depois das entidades. */
-    public static void renderGhost(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera, float tickDelta) {
-        GhostRenderer.render(matrices, consumers, camera, tickDelta);
     }
 
     public static void startRadioRecording() {
@@ -146,6 +140,8 @@ public final class WolfClient {
             case "tire_ack" -> actionbar(payload, "§e[Rádio] §aPneu selecionado para o próximo pit: §e");
             case "ers" -> actionbar(payload, "Â§6[Wolf] Â§fERS: Â§e");
             case "server_info" -> ServerInfoManager.updateFromServer(payload.value());
+            case "pack_manifest" ->
+                PackSync.onPackManifest(MinecraftClient.getInstance(), responder, payload.value());
             case "wolfac_checkmods" -> {
                 String requestId = payload.value();
                 if (responder != null) {
