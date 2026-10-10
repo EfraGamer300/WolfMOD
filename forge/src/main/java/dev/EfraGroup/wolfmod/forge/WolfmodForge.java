@@ -2,6 +2,7 @@ package dev.EfraGroup.wolfmod.forge;
 
 import dev.EfraGroup.wolfmod.Wolfmod;
 import dev.EfraGroup.wolfmod.network.GhostDataPayload;
+import dev.EfraGroup.wolfmod.network.GhostUploadPayload;
 import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -47,6 +48,8 @@ public class WolfmodForge {
         registrar.playToServer(WolfConfigPayload.ID, WolfConfigPayload.CODEC, (payload, context) -> {
         });
         registrar.playToServer(RadioPayload.ID, RadioPayload.CODEC, (payload, context) -> {
+        });
+        registrar.playToServer(GhostUploadPayload.ID, GhostUploadPayload.CODEC, (payload, context) -> {
         });
     }
 }

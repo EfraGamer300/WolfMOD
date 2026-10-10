@@ -25,7 +25,13 @@ public final class TimingRegion {
     /** Papel de um cruzamento no protocolo. */
     public enum Role {
         START,
-        END;
+        END,
+        /**
+         * A non-timing region (LAGSTART/LAGEND). The server validates whether it was
+         * crossed; the client must never treat it as a lap boundary, so the swept
+         * detector filters this role out.
+         */
+        GUARD;
 
         public static Role from(String value, Role fallback) {
             if (value == null) {
@@ -37,6 +43,9 @@ public final class TimingRegion {
             }
             if ("END".equals(normalized) || "FINISH".equals(normalized)) {
                 return END;
+            }
+            if ("GUARD".equals(normalized)) {
+                return GUARD;
             }
             return fallback;
         }

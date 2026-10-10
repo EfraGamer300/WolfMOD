@@ -3,6 +3,7 @@ package dev.EfraGroup.wolfmod.client;
 import com.mojang.brigadier.CommandDispatcher;
 import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
 import dev.EfraGroup.wolfmod.client.TimeTrial.WolfTimingClient;
+import dev.EfraGroup.wolfmod.client.ghost.GhostLineRenderer;
 import dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient;
 import dev.EfraGroup.wolfmod.client.hud.FastestLap;
 import dev.EfraGroup.wolfmod.client.pack.PackSync;
@@ -20,6 +21,9 @@ import com.mojang.brigadier.context.CommandContext;
 import java.util.function.Function;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.render.Camera;
+import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Text;
 
 /**
@@ -98,6 +102,12 @@ public final class WolfClient {
     /** HUD extra da tela de pausa (ESC). */
     public static void renderPauseHud(DrawContext context, float tickDelta) {
         PauseHud.render(context, tickDelta);
+    }
+
+    /** Ghost, desenhado no mundo depois das entidades. */
+    public static void renderGhostTrail(MatrixStack matrices, VertexConsumerProvider consumers, Camera camera) {
+        // Trail first: it sits on the ground and should be occluded by the ghost riding it.
+        GhostLineRenderer.render(matrices, consumers, camera);
     }
 
     public static void startRadioRecording() {

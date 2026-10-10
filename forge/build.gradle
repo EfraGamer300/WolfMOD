@@ -22,14 +22,7 @@ configurations {
     }
 }
 
-loom {
-    forge {
-        convertAccessWideners = true
-    }
-}
-
 repositories {
-    maven { url = 'https://maven.minecraftforge.net/' }
     maven { url = 'https://maven.minecraftforge.net/' }
 }
 

@@ -33,14 +33,34 @@ subprojects {
     loom {
         accessWidenerPath = project(':common').file('src/main/resources/wolfmod.accesswidener')
 
-        mixin {
-            defaultRefmapName = "wolfnod-refmap.json"
+        // O bloco `mixin` so pode ser configurado nos loaders que rodam em mappings
+        // yarn/intermediary (fabric e quilt). NeoForge ja usa o annotation processor e
+        // configurar isso la aborta com "You need to set useLegacyMixinAp = true"
+        // -- mensagem enganosa: essa propriedade nao existe, o valor e derivado da
+        // plataforma (isNeoForge / ForgeProvider.usesMojangAtRuntime).
+        // O :common nao e loader nenhum, entao fica fora tambem.
+        def loomName = loom.platform.toString().toLowerCase()
+        if (loomName == 'fabric' || loomName == 'quilt') {
+            mixin {
+                defaultRefmapName = "wolfnod-refmap.json"
+            }
         }
     }
 
     dependencies {
         minecraft "net.minecraft:minecraft:${rootProject.minecraft_version}"
-        mappings "net.fabricmc:yarn:${rootProject.yarn_mappings}:v2"
+
+        // Fabric e Quilt rodam em mappings yarn. NeoForge e Forge rodam em mappings
+        // Mojang, e misturar os dois quebra o remapeamento com conflitos de nome
+        // ("Failed to remap minecraft"). O :common fica em yarn, que e onde o
+        // codigo compartilhado esta escrito; o architectury-plugin remapeia o jar
+        // do :common para Mojang/SRG ao gerar os artefatos de Forge e NeoForge.
+        def platformName = loom.platform.toString().toLowerCase()
+        if (platformName == 'neoforge' || platformName == 'forge') {
+            mappings loom.officialMojangMappings()
+        } else {
+            mappings "net.fabricmc:yarn:${rootProject.yarn_mappings}:v2"
+        }
     }
 
     java {

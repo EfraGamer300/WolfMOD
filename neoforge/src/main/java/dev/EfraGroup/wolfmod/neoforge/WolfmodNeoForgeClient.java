@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import dev.EfraGroup.wolfmod.client.WolfClient;
 import dev.EfraGroup.wolfmod.client.radio.RadioConfigScreen;
+import dev.EfraGroup.wolfmod.network.GhostUploadPayload;
 import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import dev.EfraGroup.wolfmod.platform.WolfModList;
@@ -75,6 +76,16 @@ public final class WolfmodNeoForgeClient {
 
             @Override
             public void sendRadio(RadioPayload payload) {
+                PacketDistributor.sendToServer(payload);
+            }
+
+            @Override
+            public boolean canSendGhostUpload() {
+                return MinecraftClient.getInstance().getNetworkHandler() != null;
+            }
+
+            @Override
+            public void sendGhostUpload(GhostUploadPayload payload) {
                 PacketDistributor.sendToServer(payload);
             }
         });

@@ -64,17 +64,16 @@ public class NimApiClient {
 
             JsonObject req = new JsonObject();
             req.addProperty("model", MODEL);
-            req.addProperty("max_tokens", 120);
-            req.addProperty("temperature", 0.7);
+            req.addProperty("max_tokens", 500);
+            req.addProperty("temperature", 0.5);
 
             JsonArray messages = new JsonArray();
 
             JsonObject sys = new JsonObject();
             sys.addProperty("role", "system");
             sys.addProperty("content",
-                    "Voce e o engenheiro de radio de um piloto de Formula 1. "
-                            + "Responda em portugues, curto e direto (maximo 2 frases), "
-                            + "como se estivesse falando no radio da equipe.");
+                    "Você é um engenheiro de equipe de F1. "
+                            + "Responda em português, de forma direta e técnica, sem divagar.");
             messages.add(sys);
 
             JsonObject user = new JsonObject();

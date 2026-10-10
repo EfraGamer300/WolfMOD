@@ -15,12 +15,17 @@ rootProject.name = 'WolfMOD'
 // registram os eventos que o seu loader oferece e chamam o WolfClient.
 include 'common'
 include 'fabric'
-include 'neoforge'
-include 'quilt'
 
-// O Forge usa o transformer do Architectury sem a API (nao existe
-// architectury-forge para 1.21.4), entao ele entra por ultimo e pode ser
-// desativado com -PskipForge, igual ao BoatHudReforged.
-if (gradle.startParameter.projectProperties['skipForge'] == null) {
+// Um modulo de loader quebrado nao deve impedir a compilacao dos outros.
+// Basta passar -Pskip<Modulo> para nao avaliar aquele loader.
+def skip = { String name -> gradle.startParameter.projectProperties["skip$name"] != null }
+
+if (!skip('Quilt')) {
+    include 'quilt'
+}
+if (!skip('NeoForge')) {
+    include 'neoforge'
+}
+if (!skip('Forge')) {
     include 'forge'
 }

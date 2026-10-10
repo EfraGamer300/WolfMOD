@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import dev.EfraGroup.wolfmod.client.WolfClient;
 import dev.EfraGroup.wolfmod.network.GhostDataPayload;
+import dev.EfraGroup.wolfmod.network.GhostUploadPayload;
 import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import dev.EfraGroup.wolfmod.platform.WolfCommands;
@@ -20,6 +21,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.loader.api.FabricLoader;
@@ -70,6 +72,16 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
             public void sendRadio(RadioPayload payload) {
                 ClientPlayNetworking.send(payload);
             }
+
+            @Override
+            public boolean canSendGhostUpload() {
+                return ClientPlayNetworking.canSend(GhostUploadPayload.ID);
+            }
+
+            @Override
+            public void sendGhostUpload(GhostUploadPayload payload) {
+                ClientPlayNetworking.send(payload);
+            }
         });
 
         WolfModList.install(() -> FabricLoader.getInstance().getAllMods().stream()
@@ -99,6 +111,7 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
         PayloadTypeRegistry.playS2C().register(GhostDataPayload.ID, GhostDataPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(WolfConfigPayload.ID, WolfConfigPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RadioPayload.ID, RadioPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(GhostUploadPayload.ID, GhostUploadPayload.CODEC);
 
         ClientPlayNetworking.registerGlobalReceiver(WolfConfigPayload.ID, (payload, context) ->
                 context.client().execute(() ->
@@ -172,6 +185,9 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) ->
                 WolfClient.renderFastestLap(drawContext));
+
+        WorldRenderEvents.AFTER_ENTITIES.register(context ->
+                WolfClient.renderGhostTrail(context.matrixStack(), context.consumers(), context.camera()));
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (screen instanceof net.minecraft.client.gui.screen.GameMenuScreen) {

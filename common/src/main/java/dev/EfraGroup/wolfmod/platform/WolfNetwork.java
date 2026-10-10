@@ -1,5 +1,6 @@
 package dev.EfraGroup.wolfmod.platform;
 
+import dev.EfraGroup.wolfmod.network.GhostUploadPayload;
 import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 
@@ -42,6 +43,14 @@ public final class WolfNetwork {
         bridge.sendRadio(payload);
     }
 
+    public static boolean canSendGhostUpload() {
+        return bridge.canSendGhostUpload();
+    }
+
+    public static void sendGhostUpload(GhostUploadPayload payload) {
+        bridge.sendGhostUpload(payload);
+    }
+
     private static final class NoopBridge implements WolfNetworkBridge {
         private static final NoopBridge INSTANCE = new NoopBridge();
 
@@ -61,6 +70,15 @@ public final class WolfNetwork {
 
         @Override
         public void sendRadio(RadioPayload payload) {
+        }
+
+        @Override
+        public boolean canSendGhostUpload() {
+            return false;
+        }
+
+        @Override
+        public void sendGhostUpload(GhostUploadPayload payload) {
         }
     }
 }

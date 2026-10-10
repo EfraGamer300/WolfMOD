@@ -5,6 +5,7 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.EfraGroup.wolfmod.client.WolfClient;
 import dev.EfraGroup.wolfmod.client.radio.RadioConfigScreen;
 import dev.EfraGroup.wolfmod.network.GhostDataPayload;
+import dev.EfraGroup.wolfmod.network.GhostUploadPayload;
 import dev.EfraGroup.wolfmod.network.RadioPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import dev.EfraGroup.wolfmod.platform.WolfCommands;
@@ -120,6 +121,16 @@ public final class WolfmodQuiltClient {
             public void sendRadio(RadioPayload payload) {
                 ClientPlayNetworking.send(payload);
             }
+
+            @Override
+            public boolean canSendGhostUpload() {
+                return ClientPlayNetworking.canSend(GhostUploadPayload.ID);
+            }
+
+            @Override
+            public void sendGhostUpload(GhostUploadPayload payload) {
+                ClientPlayNetworking.send(payload);
+            }
         });
 
         WolfModList.install(() -> QuiltLoader.getAllMods().stream()
@@ -136,6 +147,7 @@ public final class WolfmodQuiltClient {
         PayloadTypeRegistry.playS2C().register(GhostDataPayload.ID, GhostDataPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(WolfConfigPayload.ID, WolfConfigPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RadioPayload.ID, RadioPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(GhostUploadPayload.ID, GhostUploadPayload.CODEC);
 
         ClientPlayNetworkingEvents.registerGlobalReceiver(WolfConfigPayload.ID,
                 (payload, context) -> context.client().execute(() ->

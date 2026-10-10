@@ -234,6 +234,11 @@ public final class SweptRegionDetector {
         List<Crossing> accepted = new ArrayList<>();
         for (Crossing crossing : candidates) {
             TimingRegion.Role role = crossing.region().role();
+            // Guard regions (LAGSTART/LAGEND) are validated by the server. Accepting them
+            // here would close a lap on a region that is not the finish line.
+            if (role == TimingRegion.Role.GUARD) {
+                continue;
+            }
             if (role == TimingRegion.Role.START) {
                 if (startObserved) {
                     continue;

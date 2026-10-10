@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient;
+import dev.EfraGroup.wolfmod.network.GhostUploadPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import dev.EfraGroup.wolfmod.platform.WolfNetwork;
 import dev.EfraGroup.wolfmod.platform.WolfResponder;
@@ -24,10 +26,22 @@ public final class WolfTimingClient {
     public static final String RESULT = "tt_v1_result";
     public static final String DISARM = "tt_v1_disarm";
     public static final String REPORT = "tt_v1_report";
+    public static final String TRACK = "tt_v1_track";
+    public static final String GHOST_UPLOAD = "tt_v1_ghost_upload";
 
     private static final long PING_INTERVAL_NANOS = 5_000_000_000L;
     private static final long PING_TIMEOUT_NANOS = 2_000_000_000L;
     private static final int MAX_PING_RETRIES = 3;
+
+    /**
+     * Frames per upload chunk. Each frame is 4 bytes of tick varint plus 4 floats, so 512
+     * frames lands near 9 KB — comfortably inside the plugin message ceiling while still
+     * keeping the number of packets for a full lap low.
+     */
+    private static final int UPLOAD_CHUNK_FRAMES = 512;
+
+    /** Pending upload chunks, one flushed per tick to avoid frame spikes. */
+    private final java.util.Queue<GhostUploadPayload> uploadQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     private final SweptRegionDetector detector = new SweptRegionDetector();
@@ -49,6 +63,8 @@ public final class WolfTimingClient {
     private long localStartNanos;
     private String lastResultRunId;
     private Long lastResultDisplayMillis;
+    private String currentTrackId;
+    private int recordTick;
 
     public static boolean isTimingKey(String key) {
         return key != null && key.startsWith("tt_v1_");
@@ -83,8 +99,26 @@ public final class WolfTimingClient {
             }
             case RESULT -> onResult(object);
             case DISARM -> onDisarm();
+            case TRACK -> onTrack(object);
             default -> {
             }
+        }
+    }
+
+    /**
+     * Server named the track being timed. That id is what keys the local personal-best cache
+     * and labels the lap recorded for upload, so it is stored before any recording starts.
+     */
+    private void onTrack(JsonObject object) {
+        if (protocol(object) != PROTOCOL_VERSION) {
+            return;
+        }
+        String track = text(object, "track");
+        if (track != null && !track.isBlank()) {
+            currentTrackId = track;
+            // Replay the cached lap immediately: no wait for the server payload, which only
+            // arrives once the track finishes loading.
+            GhostManagerClient.loadCached(track);
         }
     }
 
@@ -113,6 +147,7 @@ public final class WolfTimingClient {
         sender = null;
         resetNegotiation();
         detector.disarm();
+        GhostManagerClient.cancelRecording();
         Timer.reset();
     }
 
@@ -155,7 +190,82 @@ public final class WolfTimingClient {
         for (SweptRegionDetector.Crossing crossing : result.crossings()) {
             handleLocalCrossing(crossing);
         }
+        recordFrameIfRunning(client);
+        flushUploadQueue();
         Timer.update();
+    }
+
+    /**
+     * Samples the boat while a lap is in progress so the client holds its own copy of the run.
+     *
+     * <p>Every tick, matching the server's ghost cadence closely enough for playback: the
+     * frames carry their own tick stamp, so the client reconstructs real timing rather than
+     * assuming a fixed interval.
+     */
+    private void recordFrameIfRunning(MinecraftClient client) {
+        if (!Timer.isRunning() || currentTrackId == null) {
+            return;
+        }
+        if (client.player == null || client.player.getVehicle() == null) {
+            return;
+        }
+        net.minecraft.entity.Entity vehicle = client.player.getVehicle();
+        net.minecraft.util.math.Vec3d position = vehicle.getPos();
+        GhostManagerClient.recordFrame(recordTick++, (float) position.x, (float) position.y,
+                (float) position.z, vehicle.getYaw(0.0F));
+    }
+
+    /**
+     * Offers the just-driven lap to the server, which keeps it only if it has no usable
+     * recording of its own. The server still owns lap times, so this is geometry, not a claim.
+     *
+     * <p>Sent as binary chunks rather than JSON: a real lap is thousands of frames, which as
+     * JSON would blow past the plugin message limit. Chunks go out one per tick so a long
+     * upload never stalls a frame.
+     */
+    private void uploadRecordedLap() {
+        if (currentTrackId == null || !canSend()) {
+            return;
+        }
+        java.util.List<GhostManagerClient.LocalFrame> frames = GhostManagerClient.finishRecording();
+        if (frames.size() < 2) {
+            return;
+        }
+        int total = frames.size();
+        int chunkCount = (total + UPLOAD_CHUNK_FRAMES - 1) / UPLOAD_CHUNK_FRAMES;
+        // Frames queued across ticks; each tick flushes one chunk when there is one pending.
+        uploadQueue.clear();
+        for (int chunk = 0; chunk < chunkCount; chunk++) {
+            int from = chunk * UPLOAD_CHUNK_FRAMES;
+            int to = Math.min(total, from + UPLOAD_CHUNK_FRAMES);
+            int size = to - from;
+            int[] ticks = new int[size];
+            float[] xs = new float[size];
+            float[] ys = new float[size];
+            float[] zs = new float[size];
+            float[] yaws = new float[size];
+            for (int i = 0; i < size; i++) {
+                GhostManagerClient.LocalFrame frame = frames.get(from + i);
+                ticks[i] = frame.tick();
+                xs[i] = frame.x();
+                ys[i] = frame.y();
+                zs[i] = frame.z();
+                yaws[i] = frame.yaw();
+            }
+            uploadQueue.add(new GhostUploadPayload(
+                    (byte) 1, currentTrackId, chunk, chunkCount, ticks, xs, ys, zs, yaws));
+        }
+    }
+
+    /** Sends at most one queued chunk per tick, keeping the frame budget intact. */
+    private void flushUploadQueue() {
+        if (uploadQueue.isEmpty() || !canSend()) {
+            return;
+        }
+        GhostUploadPayload chunk = uploadQueue.poll();
+        if (chunk != null) {
+            WolfNetwork.sendGhostUpload(chunk);
+        }
     }
 
     public boolean ownsTimer() {
@@ -338,6 +448,9 @@ public final class WolfTimingClient {
         detector.resetRun();
         sequence = 0L;
         localStartNanos = 0L;
+        // Disarm means the run is abandoned, so the in-progress recording must not be
+        // offered to the server later.
+        GhostManagerClient.cancelRecording();
         Timer.reset();
     }
 
@@ -382,6 +495,10 @@ public final class WolfTimingClient {
         if (role == TimingRegion.Role.START) {
             localStartNanos = atNanos;
             Timer.startAtNanos(atNanos);
+            // Begin this client's own copy of the lap. recordTick restarts at 0 so the tick
+            // stamps line up with the playback index the ghost renderer expects.
+            recordTick = 0;
+            GhostManagerClient.beginRecording(currentTrackId);
             sendReport(role, atNanos, atNanos, 0L, crossing.region().id());
         } else if (role == TimingRegion.Role.END) {
             long startNanos = localStartNanos > 0L ? localStartNanos : Timer.getStartAtNanos();
@@ -390,6 +507,13 @@ public final class WolfTimingClient {
                 ? Math.max(0L, atNanos - startNanos) / 1_000_000L
                 : Timer.getElapsedMillis();
             sendReport(role, startNanos, atNanos, displayMillis, crossing.region().id());
+            // Only a lap that actually beat the cached best is worth offering to the server.
+            if (currentTrackId != null && displayMillis > 0L
+                    && displayMillis < GhostManagerClient.cachedBestMillis(currentTrackId)) {
+                uploadRecordedLap();
+            } else {
+                GhostManagerClient.cancelRecording();
+            }
             detector.resetRun();
         }
     }
