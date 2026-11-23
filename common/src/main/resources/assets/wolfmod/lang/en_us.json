@@ -1,5 +1,10 @@
 {
     "key.wolfnmod.radio": "Rádio da Equipe",
     "key.wolfnmod.radio_config": "Configurar Rádio",
-    "category.wolfnmod.radio": "WolfNMod"
+    "key.wolfnmod.toggle_line": "Alternar Linha do Ghost",
+    "key.wolfnmod.toggle_ghost": "Alternar Ghost",
+    "key.wolfnmod.honk": "Buzina",
+    "category.wolfnmod.radio": "WolfNMod",
+    "category.wolfnmod.ghost": "WolfMOD - Ghost",
+    "category.wolfnmod.honk": "WolfMOD - Buzina"
 }

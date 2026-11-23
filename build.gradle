@@ -42,7 +42,7 @@ subprojects {
         def loomName = loom.platform.toString().toLowerCase()
         if (loomName == 'fabric' || loomName == 'quilt') {
             mixin {
-                defaultRefmapName = "wolfnod-refmap.json"
+                defaultRefmapName = "WolfMOD-common-common-refmap.json"
             }
         }
     }

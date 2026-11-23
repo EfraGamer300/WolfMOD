@@ -57,11 +57,14 @@ public class PauseHud {
         String server = ServerInfoManager.getCurrentSubServer();
 
         // Mede as duas linhas: o titulo acima, o par label/valor abaixo.
+        // A largura do titulo inclui o ponto de conexao (DOT + 4) para nao
+        // vazar para fora da borda.
         int labelW = renderer.getWidth(LABEL);
         int valueW = renderer.getWidth(server);
-        int subRowW = DOT + 4 + Math.max(labelW, valueW);
         int networkW = renderer.getWidth(network);
-        int textW = Math.max(subRowW, networkW);
+        int titleRowW = DOT + 4 + networkW;
+        int labelValueW = DOT + 4 + labelW + 6 + valueW;
+        int textW = Math.max(titleRowW, labelValueW);
 
         // O texto comeca depois do logo (textX = cx + LOGO + PAD), entao o logo
         // precisa entrar na largura alem do proprio texto. Sem isso o painel fica
@@ -109,14 +112,14 @@ public class PauseHud {
         context.fill(textX, titleDotY, textX + DOT, titleDotY + DOT, live ? DOT_ON : DOT_OFF);
         context.drawTextWithShadow(renderer, network, textX + DOT + 4, networkY, TEXT_TITLE);
 
-        // Label e valor do sub-servidor na segunda linha.
+        // Label e valor do sub-servidor na segunda linha, tudo depois do logo.
         int subY = networkY + fh + ROW_GAP;
         int subDotY = subY + (fh - DOT) / 2;
-        context.fill(cx, subDotY, cx + DOT, subDotY + DOT, live ? DOT_ON : DOT_OFF);
-        context.drawTextWithShadow(renderer, LABEL, cx + DOT + 4, subY, TEXT_LABEL);
+        context.fill(textX, subDotY, textX + DOT, subDotY + DOT, live ? DOT_ON : DOT_OFF);
+        context.drawTextWithShadow(renderer, LABEL, textX + DOT + 4, subY, TEXT_LABEL);
 
         // O valor alinha com o fim da linha do label, para nao ficar torto.
-        int valueX = cx + DOT + 4 + labelW + 6;
+        int valueX = textX + DOT + 4 + labelW + 6;
         context.drawTextWithShadow(renderer, server, valueX, subY, TEXT_VALUE);
     }
 }

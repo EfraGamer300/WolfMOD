@@ -191,6 +191,7 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
         if (!enabled) return;
         MinecraftClient client = MinecraftClient.getInstance();
         int worldTick = client.world != null ? (int) client.world.getTime() : 0;
+        PLAYBACK.setPlaybackOffset(GhostConfig.get().ghostPlaybackOffset);
         PLAYBACK.start(worldTick);
     }
 
@@ -249,7 +250,7 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
         if (boatEntity == null || boatWorld != client.world) {
             discardBoat();
             boatWorld = client.world;
-            boatEntity = new GhostBoat(client.world);
+            boatEntity = new GhostBoat(client.world, GhostBoatType.fromId(GhostConfig.get().ghostBoatType));
             boatEntity.setNoGravity(true);
             boatEntity.noClip = true;
             boatEntity.setSilent(true);
@@ -268,6 +269,10 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
      */
     private static void tickRider(MinecraftClient client, GhostPose pose) {
         if (boatEntity == null || client.world == null) {
+            return;
+        }
+        if (!GhostConfig.get().renderPersonalBestGhost || !GhostConfig.get().ghostPlayerVisible) {
+            discardRider();
             return;
         }
         if (riderEntity == null || riderWorld != client.world) {

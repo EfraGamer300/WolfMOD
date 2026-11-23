@@ -1,7 +1,9 @@
 package dev.EfraGroup.wolfmod.client.hud;
 
+import dev.EfraGroup.wolfmod.client.GhostConfig;
 import dev.EfraGroup.wolfmod.client.ServerInfoManager;
 import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
+import dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -41,6 +43,10 @@ public class Hud {
     public static void render(DrawContext context, float tickDelta) {
         MinecraftClient client = MinecraftClient.getInstance();
 
+        GhostConfig cfg = GhostConfig.get();
+        if (!cfg.useTimeTrialTimer) {
+            return;
+        }
         if (client.player == null || client.options.hudHidden || !Timer.isRunning()
                 || !ServerInfoManager.isOnWolfNetwork()) {
             return;
@@ -69,10 +75,25 @@ public class Hud {
         int screenHeight = client.getWindow().getScaledHeight();
 
         int x = (screenWidth / 2) - (w / 2);
-        int y = screenHeight - h - 48;
+        int y = (int) (screenHeight * cfg.timeTrialTimerYPosition) - (h / 2);
+        if (y < 0) y = 0;
+        if (y + h > screenHeight) y = screenHeight - h;
+
+        float scale = cfg.timeTrialTimerScale;
+        int cx = x + w / 2;
+        int cy = y + h / 2;
+        context.getMatrices().push();
+        context.getMatrices().translate(cx, cy, 0);
+        context.getMatrices().scale(scale, scale, 1.0f);
+        context.getMatrices().translate(-cx, -cy, 0);
+
+        int bgAlpha = (int) (cfg.timeTrialTimerBackgroundOpacity * 255.0f);
+        if (bgAlpha < 0) bgAlpha = 0;
+        if (bgAlpha > 255) bgAlpha = 255;
+        int bgColor = (bgAlpha << 24) | 0x121220;
 
         context.fill(x - 2, y - 2, x + w + 2, y + h + 2, SHADOW);
-        context.fill(x, y, x + w, y + h, BG);
+        context.fill(x, y, x + w, y + h, bgColor);
 
         context.fill(x, y, x + w, y + 1, BORDER);
         context.fill(x, y + h - 1, x + w, y + h, BORDER);
@@ -111,5 +132,40 @@ public class Hud {
         if (!millis.isEmpty()) {
             context.drawText(renderer, millis, timeX + mainW, timeY, TEXT_MILLIS, true);
         }
+
+        // Delta vs personal best (BoatLabs-style).
+        try {
+            String trackId = dev.EfraGroup.wolfmod.client.WolfClient.timing().currentTrackId();
+            long best = GhostManagerClient.cachedBestMillis(trackId);
+            if (best > 0L) {
+                long current = Timer.getElapsedMillis();
+                long deltaMs = best - current;
+                String deltaText;
+                int deltaColor;
+                if (deltaMs >= 0) {
+                    deltaText = "-" + formatMillis(deltaMs);
+                    deltaColor = 0xFF00FF00;
+                } else {
+                    deltaText = "+" + formatMillis(-deltaMs);
+                    deltaColor = 0xFFFF0000;
+                }
+                int deltaW = renderer.getWidth(deltaText);
+                int deltaY = timeY + fontHeight + ROW_GAP;
+                context.drawText(renderer, deltaText, contentX + (contentW - deltaW) / 2, deltaY, deltaColor, true);
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        context.getMatrices().pop();
+    }
+
+    private static String formatMillis(long ms) {
+        long minutes = ms / 60_000L;
+        long seconds = (ms % 60_000L) / 1_000L;
+        long millis = ms % 1_000L;
+        if (minutes > 0) {
+            return String.format(java.util.Locale.ROOT, "%d:%02d.%03d", minutes, seconds, millis);
+        }
+        return String.format(java.util.Locale.ROOT, "%02d.%03d", seconds, millis);
     }
 }

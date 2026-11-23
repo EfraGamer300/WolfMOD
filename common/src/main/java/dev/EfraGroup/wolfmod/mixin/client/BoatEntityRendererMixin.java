@@ -2,28 +2,36 @@ package dev.EfraGroup.wolfmod.mixin.client;
 
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.entity.BoatEntityRenderer;
-import net.minecraft.client.render.entity.model.EntityModel;
 import net.minecraft.util.Identifier;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Forca o barco a renderizar na camada translucida para que o alpha do
  * ghost (aplicado no redirect do modelo) seja respeitado pelo blend.
- * Espelha o BoatLabs: vale para todos os barcos, mas com textura opaca
- * e alpha 1 o resultado visual e identico ao da camada padrao.
+ *
+ * <p>Usa {@code @Inject} no retorno em vez de um redirect da chamada interna:
+ * o alvo do redirect (metodo herdado {@code Model.getLayer}) era remapeado
+ * erroneamente no build de producao, quebrando a injecao e crashando o jogo.
+ * Espelha o BoatLabs: vale para todos os barcos, mas com textura opaca e alpha 1
+ * o resultado visual e identico ao da camada padrao.
  */
 @Mixin(BoatEntityRenderer.class)
-public class BoatEntityRendererMixin {
-    @Redirect(
+public abstract class BoatEntityRendererMixin {
+    @Shadow
+    @Final
+    private Identifier texture;
+
+    @Inject(
             method = "getRenderLayer()Lnet/minecraft/client/render/RenderLayer;",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/render/entity/model/EntityModel;getLayer(Lnet/minecraft/util/Identifier;)Lnet/minecraft/client/render/RenderLayer;"
-            )
+            at = @At("RETURN"),
+            cancellable = true
     )
-    private RenderLayer wolfmod$ghostTranslucentLayer(EntityModel<?> model, Identifier texture) {
-        return RenderLayer.getEntityTranslucent(texture);
+    private void wolfmod$ghostTranslucentLayer(CallbackInfoReturnable<RenderLayer> cir) {
+        cir.setReturnValue(RenderLayer.getEntityTranslucent(this.texture));
     }
 }

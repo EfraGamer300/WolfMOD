@@ -8,10 +8,15 @@ public final class GhostPlayback {
     private volatile boolean active;
     private volatile int frameIndex;
     private volatile int startWorldTick;
+    private volatile int playbackOffsetTicks;
 
     public void setGhostData(GhostData ghostData) {
         this.ghostData = ghostData;
         this.frameIndex = 0;
+    }
+
+    public void setPlaybackOffset(int ticks) {
+        this.playbackOffsetTicks = ticks;
     }
 
     public void start(int worldTick) {
@@ -41,7 +46,7 @@ public final class GhostPlayback {
             return null;
         }
 
-        float targetTick = (currentWorldTick - startWorldTick) + tickDelta;
+        float targetTick = (currentWorldTick - startWorldTick) + tickDelta + playbackOffsetTicks;
         int frameCount = data.frameCount();
         if (frameCount == 0) {
             return null;

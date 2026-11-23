@@ -1,6 +1,8 @@
 package dev.EfraGroup.wolfmod.mixin.client;
 
+import dev.EfraGroup.wolfmod.client.GhostConfig;
 import dev.EfraGroup.wolfmod.client.ghost.GhostPlayer;
+import dev.EfraGroup.wolfmod.client.ghost.GhostRenderStateAccessor;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.model.EntityModel;
@@ -16,12 +18,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Render do piloto falso: marca o render state em {@code updateRenderState},
- * re-renderiza o modelo com alpha + tint amarelo e suprime a nametag.
+ * Render do piloto ghost: marca o render state em {@code updateRenderState}
+ * e re-renderiza o modelo com alpha + tint amarelo em vez do render opaco.
  * Espelha o BoatLabs. O redirect so transforma o metodo alvo, sem recursao.
  */
 @Mixin(LivingEntityRenderer.class)
 public class LivingEntityRendererMixin<T extends LivingEntity, S extends LivingEntityRenderState> {
+
     /** Amarelo com ~50% de alpha (ARGB), multiplicado na skin do piloto. */
     private static final int GHOST_PLAYER_COLOR = 0x80FFFF00;
 
@@ -33,8 +36,10 @@ public class LivingEntityRendererMixin<T extends LivingEntity, S extends LivingE
             )
     )
     private void wolfmod$renderGhostPlayerTransparent(EntityModel<S> model, MatrixStack matrices, VertexConsumer vertices, int light, int overlay, int color, S state) {
-        if (state instanceof PlayerEntityRenderState playerState && GhostRenderStateAccessor.get(playerState).wolfmod$isGhost()) {
-            model.render(matrices, vertices, light, overlay, GHOST_PLAYER_COLOR);
+        if (state instanceof PlayerEntityRenderState playerState
+                && GhostRenderStateAccessor.get(playerState).wolfmod$isGhost()) {
+            int ghostColor = GhostConfig.get().ghostOpacityAlpha() | 0x00FFFF00;
+            model.render(matrices, vertices, light, overlay, ghostColor);
         } else {
             model.render(matrices, vertices, light, overlay, color);
         }

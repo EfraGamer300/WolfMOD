@@ -12,6 +12,8 @@ import dev.EfraGroup.wolfmod.client.hud.PauseHud;
 import dev.EfraGroup.wolfmod.client.radio.RadioManager;
 import dev.EfraGroup.wolfmod.client.radio.RadioSettings;
 import dev.EfraGroup.wolfmod.client.vehicle.CarPhysics;
+import dev.EfraGroup.wolfmod.content.ContentGate;
+import dev.EfraGroup.wolfmod.content.ContentStatusResponder;
 import dev.EfraGroup.wolfmod.network.GhostDataPayload;
 import dev.EfraGroup.wolfmod.network.WolfConfigPayload;
 import dev.EfraGroup.wolfmod.platform.WolfCommands;
@@ -66,6 +68,7 @@ public final class WolfClient {
 
     public static void onDisconnect() {
         ServerInfoManager.reset();
+        ContentGate.reset();
         GhostManagerClient.clearGhost();
         if (timingClient != null) {
             timingClient.onDisconnect();
@@ -117,6 +120,10 @@ public final class WolfClient {
     public static void handleWolfConfig(WolfConfigPayload payload, WolfResponder responder) {
         if (!ServerInfoManager.isOnWolfNetwork()) return;
         String key = payload.key();
+        if (ContentStatusResponder.isContentKey(key)) {
+            ContentStatusResponder.handle(payload, responder);
+            return;
+        }
         if (WolfTimingClient.isTimingKey(key)) {
             if (timingClient != null) {
                 timingClient.handle(payload, responder);

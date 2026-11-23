@@ -300,6 +300,10 @@ public final class WolfTimingClient {
         return geometryInstalled;
     }
 
+    public String currentTrackId() {
+        return currentTrackId;
+    }
+
     public String runId() {
         return runId;
     }

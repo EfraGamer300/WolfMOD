@@ -1,5 +1,6 @@
 package dev.EfraGroup.wolfmod.mixin.client;
 
+import dev.EfraGroup.wolfmod.client.ghost.GhostRenderStateAccessor;
 import net.minecraft.client.render.entity.state.BoatEntityRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;

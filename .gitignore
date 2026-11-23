@@ -25,3 +25,10 @@ Thumbs.db
 txt.txt
 .env
 .env.*
+
+# Logs de build locais
+*.log
+build-log.txt
+
+# Estado de ferramentas/agentes
+.commandcode/

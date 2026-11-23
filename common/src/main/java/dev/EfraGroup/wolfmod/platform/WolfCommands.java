@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import dev.EfraGroup.wolfmod.client.ServerInfoManager;
 import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
+import dev.EfraGroup.wolfmod.client.GhostConfig;
 import dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient;
 import dev.EfraGroup.wolfmod.client.hud.FastestLap;
 import dev.EfraGroup.wolfmod.client.vehicle.CarPhysics;
@@ -52,6 +53,8 @@ public final class WolfCommands {
         registerDebug(dispatcher, builder, source);
         registerFastestLap(dispatcher, builder, source);
         registerGhostToggle(dispatcher, builder, source);
+        registerLineToggle(dispatcher, builder, source);
+        registerBoatLabsMod(dispatcher, builder, source);
         registerCarPhysics(dispatcher, builder, source);
     }
 
@@ -118,6 +121,49 @@ public final class WolfCommands {
                             : "[WolfMod] Ghost desativado."));
                     return 1;
                 }));
+    }
+
+    private static <S> void registerLineToggle(
+            CommandDispatcher<S> dispatcher,
+            Builder<S> builder,
+            Function<CommandContext<S>, Source<S>> source
+    ) {
+        dispatcher.register(builder.literal("linetoggle")
+                .requires(src -> ServerInfoManager.isOnWolfNetwork())
+                .executes(context -> {
+                    GhostConfig cfg = GhostConfig.get();
+                    cfg.renderLine = !cfg.renderLine;
+                    cfg.save();
+                    source.apply(context).feedback(Text.literal(cfg.renderLine
+                            ? "[WolfMod] Linha de personal best ativada."
+                            : "[WolfMod] Linha de personal best desativada."));
+                    return 1;
+                }));
+    }
+
+    private static <S> void registerBoatLabsMod(
+            CommandDispatcher<S> dispatcher,
+            Builder<S> builder,
+            Function<CommandContext<S>, Source<S>> source
+    ) {
+        dispatcher.register(builder.literal("boatlabsmod")
+                .requires(src -> ServerInfoManager.isOnWolfNetwork())
+                .then(builder.literal("toggle_line").executes(context -> {
+                    GhostConfig cfg = GhostConfig.get();
+                    cfg.renderLine = !cfg.renderLine;
+                    cfg.save();
+                    source.apply(context).feedback(Text.literal(cfg.renderLine
+                            ? "[WolfMod] Linha de personal best ativada."
+                            : "[WolfMod] Linha de personal best desativada."));
+                    return 1;
+                }))
+                .then(builder.literal("toggle_ghost").executes(context -> {
+                    boolean enabled = GhostManagerClient.toggleEnabled();
+                    source.apply(context).feedback(Text.literal(enabled
+                            ? "[WolfMod] Ghost ativado."
+                            : "[WolfMod] Ghost desativado."));
+                    return 1;
+                })));
     }
 
     private static <S> void registerCarPhysics(

@@ -1,5 +1,6 @@
 package dev.EfraGroup.wolfplugin;
 
+import dev.EfraGroup.wolfplugin.content.ContentHandshake;
 import dev.EfraGroup.wolfplugin.utils.VarIntUtils;
 import dev.EfraGroup.wolfplugin.vehicle.CarPhysics;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,7 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
     private byte[] handshakePayload;
     private byte[] serverInfoPayload;
     private CarPhysics carPhysics;
+    private ContentHandshake contentHandshake;
 
     @Override
     public void onEnable() {
@@ -40,6 +42,13 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         handshakePayload = VarIntUtils.encodeString("1", "");
         serverInfoPayload = VarIntUtils.encodeString("server_info", getConfig().getString("server-info", "Desconhecido"));
         carPhysics = new CarPhysics(this);
+        contentHandshake = new ContentHandshake(
+            this,
+            getConfig().getString("content.required-version", "0"),
+            getConfig().getString("content.min-version", "0"),
+            getConfig().getString("content.manifest-url", "https://wolfnetwork.com.br/content/manifest.json"),
+            getConfig().getString("content.server-id", "wolfnetwork"));
+        contentHandshake.start();
 
         getServer().getMessenger().registerOutgoingPluginChannel(this, CHANNEL);
 
@@ -70,6 +79,10 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         if (carPhysics != null) {
             carPhysics.stop();
         }
+        if (contentHandshake != null) {
+            contentHandshake.stop();
+            contentHandshake = null;
+        }
 
         getServer().getMessenger().unregisterOutgoingPluginChannel(this, CHANNEL);
         getServer().getMessenger().unregisterIncomingPluginChannel(this, CHANNEL);
@@ -89,6 +102,10 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         }, 40L);
 
         pendingHandshakeTasks.put(player.getUniqueId(), task);
+
+        if (contentHandshake != null) {
+            contentHandshake.onPlayerJoin(player);
+        }
     }
 
     @EventHandler
@@ -101,6 +118,9 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
             carPhysics.setEnabled(event.getPlayer().getUniqueId(), false);
         }
         pendingTireChanges.remove(event.getPlayer().getUniqueId());
+        if (contentHandshake != null) {
+            contentHandshake.onPlayerQuit(event.getPlayer());
+        }
     }
 
     @Override
@@ -116,6 +136,12 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         try {
             VarIntUtils.DecodedStrings decoded = VarIntUtils.decodeStrings(message);
             String key = decoded.key();
+
+            if (contentHandshake != null
+                    && dev.EfraGroup.wolfplugin.content.ContentProtocol.isContentKey(key)) {
+                contentHandshake.handleIncoming(player, key, decoded.value());
+                return;
+            }
 
             if ("version_reply".equals(key)) {
                 player.sendPluginMessage(this, CHANNEL, serverInfoPayload);
@@ -145,6 +171,10 @@ public class WolfPlugin extends JavaPlugin implements Listener, PluginMessageLis
         } catch (Exception e) {
             getLogger().warning("Erro ao processar mensagem de rádio de " + player.getName() + ": " + e.getMessage());
         }
+    }
+
+    public ContentHandshake getContentHandshake() {
+        return contentHandshake;
     }
 
     private final class CarPhysicsCommand implements CommandExecutor, TabCompleter {

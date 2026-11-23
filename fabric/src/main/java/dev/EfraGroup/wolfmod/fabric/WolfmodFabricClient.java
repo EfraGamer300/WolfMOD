@@ -38,6 +38,9 @@ import org.lwjgl.glfw.GLFW;
 public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitializer {
     private static KeyBinding radioKeyBinding;
     private static KeyBinding configKeyBinding;
+    private static KeyBinding toggleLineKeyBinding;
+    private static KeyBinding toggleGhostKeyBinding;
+    private static KeyBinding honkKeyBinding;
 
     @Override
     public void onInitializeClient() {
@@ -49,6 +52,7 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
         registerTick();
         registerCommands();
         registerRendering();
+        DisplayPassengerFix.init();
     }
 
     private void installBridges() {
@@ -104,6 +108,27 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
                 GLFW.GLFW_KEY_KP_DECIMAL,
                 "category.wolfnmod.radio"
         ));
+
+        toggleLineKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.wolfnmod.toggle_line",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN,
+                "category.wolfnmod.ghost"
+        ));
+
+        toggleGhostKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.wolfnmod.toggle_ghost",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN,
+                "category.wolfnmod.ghost"
+        ));
+
+        honkKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.wolfnmod.honk",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_H,
+                "category.wolfnmod.honk"
+        ));
     }
 
     private void registerPayloads() {
@@ -139,6 +164,27 @@ public class WolfmodFabricClient implements net.fabricmc.api.ClientModInitialize
             }
             if (configKeyBinding.wasPressed()) {
                 client.setScreen(new dev.EfraGroup.wolfmod.client.radio.RadioConfigScreen());
+            }
+            if (toggleLineKeyBinding.wasPressed()) {
+                dev.EfraGroup.wolfmod.client.GhostConfig cfg = dev.EfraGroup.wolfmod.client.GhostConfig.get();
+                cfg.renderLine = !cfg.renderLine;
+                cfg.save();
+                if (client.player != null) {
+                    client.player.sendMessage(net.minecraft.text.Text.literal(cfg.renderLine
+                            ? "[WolfMod] Linha de personal best ativada."
+                            : "[WolfMod] Linha de personal best desativada."), false);
+                }
+            }
+            if (toggleGhostKeyBinding.wasPressed()) {
+                boolean enabled = dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient.toggleEnabled();
+                if (client.player != null) {
+                    client.player.sendMessage(net.minecraft.text.Text.literal(enabled
+                            ? "[WolfMod] Ghost ativado."
+                            : "[WolfMod] Ghost desativado."), false);
+                }
+            }
+            if (honkKeyBinding.wasPressed()) {
+                dev.EfraGroup.wolfmod.client.HonkManager.tryHonk();
             }
         });
 

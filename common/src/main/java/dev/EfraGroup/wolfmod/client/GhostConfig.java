@@ -33,6 +33,36 @@ public final class GhostConfig {
     /** Boat shown for the ghost; other boat types are selectable from config. */
     public String ghostBoatType = "oak";
 
+    /** Opacity of the ghost (boat + player), 0.0–1.0. */
+    public float ghostOpacity = 0.5f;
+
+    /** Allow the ghost boat to collide with the player. */
+    public boolean allowGhostCollision = false;
+
+    /** Render the ghost player model. */
+    public boolean ghostPlayerVisible = true;
+
+    /** Enable the Time Trial timer HUD. */
+    public boolean useTimeTrialTimer = true;
+
+    /** Y position of the timer HUD (0.0 = top, 1.0 = bottom). */
+    public float timeTrialTimerYPosition = 0.85f;
+
+    /** Scale of the timer HUD. */
+    public float timeTrialTimerScale = 1.0f;
+
+    /** Opacity of the timer HUD background (0.0–1.0). */
+    public float timeTrialTimerBackgroundOpacity = 0.7f;
+
+    /** Offset in ticks applied to ghost playback. */
+    public int ghostPlaybackOffset = 0;
+
+    /** Render the personal best ghost player. */
+    public boolean renderPersonalBestGhost = true;
+
+    /** Render the personal best ground line. */
+    public boolean renderPersonalBestLine = true;
+
     private static GhostConfig instance;
 
     private GhostConfig() {
@@ -87,6 +117,26 @@ public final class GhostConfig {
         if (this.ghostBoatType == null || this.ghostBoatType.isBlank()) {
             this.ghostBoatType = "oak";
         }
+        if (this.timeTrialTimerYPosition < 0.0f || this.timeTrialTimerYPosition > 1.0f) {
+            this.timeTrialTimerYPosition = 0.85f;
+        }
+        if (this.timeTrialTimerScale <= 0.0f) {
+            this.timeTrialTimerScale = 1.0f;
+        }
+        if (this.timeTrialTimerBackgroundOpacity < 0.0f || this.timeTrialTimerBackgroundOpacity > 1.0f) {
+            this.timeTrialTimerBackgroundOpacity = 0.7f;
+        }
+        if (this.ghostPlaybackOffset < 0) {
+            this.ghostPlaybackOffset = 0;
+        }
+        if (this.ghostOpacity < 0.0f || this.ghostOpacity > 1.0f) {
+            this.ghostOpacity = 0.5f;
+        }
+    }
+
+    /** Alpha channel (0x00–0xFF) for the ghost, derived from {@link #ghostOpacity}. */
+    public int ghostOpacityAlpha() {
+        return (int) (this.ghostOpacity * 255.0f) << 24;
     }
 
     private static Path configPath() {
