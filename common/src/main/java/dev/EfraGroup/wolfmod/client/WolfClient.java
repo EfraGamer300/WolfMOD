@@ -135,7 +135,11 @@ public final class WolfClient {
     }
 
     public static void handleWolfConfig(WolfConfigPayload payload, WolfResponder responder) {
-        if (!ServerInfoManager.isOnWolfNetwork()) return;
+        if (!ServerInfoManager.isOnWolfNetwork()) {
+            // A payload on the Wolf channel is the server telling us it runs the plugin, so
+            // the address check (which fails on direct connect and proxies) is not needed.
+            ServerInfoManager.markProtocolSeen();
+        }
         String key = payload.key();
         if (ContentStatusResponder.isContentKey(key)) {
             ContentStatusResponder.handle(payload, responder);
@@ -189,7 +193,7 @@ public final class WolfClient {
     }
 
     public static void handleGhostData(GhostDataPayload payload) {
-        if (!ServerInfoManager.isOnWolfNetwork()) return;
+        ServerInfoManager.markProtocolSeen();
         GhostManagerClient.loadGhost(payload);
     }
 

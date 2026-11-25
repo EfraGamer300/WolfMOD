@@ -4,6 +4,13 @@ import net.minecraft.client.MinecraftClient;
 
 public class ServerInfoManager {
     private static boolean isOnWolfNetwork = false;
+    /**
+     * Set once the server sends a payload on {@code wolfnetwork:settings}. The server-list
+     * address is not reliable (direct connect, proxies and launchers can hide it), and
+     * requiring the domain used to disable the HUD, the ghost and every plugin message at
+     * once. Speaking the channel is proof enough that the Wolf plugin is running.
+     */
+    private static boolean protocolSeen = false;
     private static String currentSubServer = "Unknown";
     private static String displayServerName = "WolfNetwork";
 
@@ -46,7 +53,12 @@ public class ServerInfoManager {
     }
 
     public static boolean isOnWolfNetwork() {
-        return isOnWolfNetwork;
+        return isOnWolfNetwork || protocolSeen;
+    }
+
+    /** Marks the current connection as a Wolf server because it spoke our channel. */
+    public static void markProtocolSeen() {
+        protocolSeen = true;
     }
 
     public static String getCurrentSubServer() {
@@ -63,6 +75,7 @@ public class ServerInfoManager {
 
     public static void reset() {
         isOnWolfNetwork = false;
+        protocolSeen = false;
         currentSubServer = "Unknown";
         displayServerName = "WolfNetwork";
     }

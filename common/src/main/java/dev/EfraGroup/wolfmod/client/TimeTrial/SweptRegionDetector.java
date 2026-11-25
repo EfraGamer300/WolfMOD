@@ -23,6 +23,12 @@ public final class SweptRegionDetector {
     public static final double MAX_TELEPORT_DISTANCE = 2_500.0;
     private static final double MAX_TELEPORT_DISTANCE_SQUARED =
             MAX_TELEPORT_DISTANCE * MAX_TELEPORT_DISTANCE;
+    /**
+     * Start and finish usually share the same line, so one crossing enters both regions.
+     * The server ignores a START/END pair inside this window; without the same rule the
+     * client started and stopped the lap in the same tick, leaving the HUD dead.
+     */
+    private static final long START_END_DEBOUNCE_NANOS = 2_000_000_000L;
 
     private TimingGeometry geometry;
     private ClientWorld world;
@@ -32,6 +38,7 @@ public final class SweptRegionDetector {
     private boolean paused;
     private boolean startObserved;
     private boolean endObserved;
+    private long startAtNanos;
     private final Set<String> insideRegions = new HashSet<>();
 
     /** Motivo pelo qual uma amostra não pode produzir cruzamentos. */
@@ -244,8 +251,12 @@ public final class SweptRegionDetector {
                     continue;
                 }
                 startObserved = true;
+                startAtNanos = crossing.atNanos();
                 accepted.add(crossing);
             } else if (startObserved && !endObserved) {
+                if (crossing.atNanos() - startAtNanos < START_END_DEBOUNCE_NANOS) {
+                    continue;
+                }
                 endObserved = true;
                 accepted.add(crossing);
             }
