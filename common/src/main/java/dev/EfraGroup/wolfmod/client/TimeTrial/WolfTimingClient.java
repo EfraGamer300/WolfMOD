@@ -53,6 +53,19 @@ public final class WolfTimingClient {
     private boolean serverReady;
     private boolean geometryInstalled;
     private boolean ready;
+    /**
+     * True while a geometry is installed and the run has not been disarmed. The local
+     * detector only needs the regions to work, so it does not wait for the full
+     * handshake ({@link #ready}): a lost capabilities message must not leave the HUD and
+     * the ghost dead on a server that already told us where the start line is.
+     */
+    private boolean armed;
+    /**
+     * Sticky proof that this server speaks the v1 timing protocol. Set as soon as a
+     * valid {@code tt_v1_hello} (or any other v1 message carrying geometry/ready) is
+     * received, and cleared only by a new connection.
+     */
+    private boolean v1TimingSeen;
     private String runId = "local";
     private long sequence;
     private long pingId;
@@ -180,7 +193,7 @@ public final class WolfTimingClient {
             sendReady();
         }
         maybeSendPing(now);
-        if (!ready) {
+        if (!armed) {
             detector.resetTracking();
             return;
         }
@@ -268,8 +281,29 @@ public final class WolfTimingClient {
         }
     }
 
+    /**
+     * Whether the v1 timing protocol owns the HUD clock on this connection.
+     *
+     * <p>Sticky by design. The plugin's legacy {@code "2"}/{@code "3"} keys (sent by
+     * {@code /tt} and {@code /ttr} while loading the ghost) used to start the timer
+     * whenever {@link #ready} happened to be false — and it is false for at least one
+     * tick after every geometry install, because the client has to re-acknowledge the
+     * new geometry. That race started the timer on the command instead of on the start
+     * line. Once the server has spoken v1, only region crossings may move the timer; a
+     * server without the v1 protocol never says hello, so the legacy path still works.
+     */
     public boolean ownsTimer() {
-        return ready;
+        return v1TimingSeen || armed || ready;
+    }
+
+    /** Whether a geometry is installed and the run is not disarmed. */
+    public boolean isArmed() {
+        return armed;
+    }
+
+    /** Whether this server has spoken the v1 timing protocol at least once. */
+    public boolean hasSeenV1() {
+        return v1TimingSeen;
     }
 
     public void resetAfterLegacyTimer(boolean running) {
@@ -330,7 +364,9 @@ public final class WolfTimingClient {
         clientReadySent = false;
         serverReady = false;
         geometryInstalled = false;
+        armed = false;
         ready = false;
+        v1TimingSeen = false;
         detector.disarm();
         sequence = 0L;
         runId = "local";
@@ -348,10 +384,12 @@ public final class WolfTimingClient {
         if (protocol(object) != PROTOCOL_VERSION) {
             return;
         }
+        v1TimingSeen = true;
         capabilitiesSent = false;
         clientReadySent = false;
         serverReady = false;
         geometryInstalled = false;
+        armed = false;
         ready = false;
         detector.disarm();
         Timer.reset();
@@ -372,6 +410,7 @@ public final class WolfTimingClient {
         if (protocol(object) != PROTOCOL_VERSION) {
             return;
         }
+        v1TimingSeen = true;
         if (
             !booleanValue(object, "enabled", true)
                 || !booleanValue(object, "accepted", true)
@@ -392,6 +431,7 @@ public final class WolfTimingClient {
         if (protocol(object) != PROTOCOL_VERSION) {
             return;
         }
+        v1TimingSeen = true;
         String geometryJson = text(object, "geometry");
         if (geometryJson == null) {
             geometryJson = text(object, "json");
@@ -449,6 +489,7 @@ public final class WolfTimingClient {
         clientReadySent = false;
         serverReady = false;
         ready = false;
+        armed = false;
         detector.resetRun();
         sequence = 0L;
         localStartNanos = 0L;
@@ -486,9 +527,11 @@ public final class WolfTimingClient {
             localStartNanos = 0L;
             detector.setGeometry(geometry);
             geometryInstalled = true;
+            armed = true;
             clientReadySent = false;
         } catch (RuntimeException ignored) {
             geometryInstalled = false;
+            armed = false;
         }
         updateReady();
     }

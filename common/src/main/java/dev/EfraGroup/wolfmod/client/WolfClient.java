@@ -51,6 +51,23 @@ public final class WolfClient {
         return timingClient;
     }
 
+    /** One-line timing state, used by {@code /wolfmod timing} to diagnose the handshake. */
+    public static String timingStatusLine() {
+        WolfTimingClient timing = timingClient;
+        if (timing == null) {
+            return "timing=null";
+        }
+        return "net=" + ServerInfoManager.isOnWolfNetwork()
+                + " conn=" + timing.isConnected()
+                + " v1=" + timing.hasSeenV1()
+                + " geo=" + timing.hasTimingGeometry()
+                + " armed=" + timing.isArmed()
+                + " ready=" + timing.isReady()
+                + " track=" + timing.currentTrackId()
+                + " timer=" + Timer.getState()
+                + " ping=" + timing.pongDelayMillis() + "ms";
+    }
+
     public static <S> void registerCommands(
             CommandDispatcher<S> dispatcher,
             WolfCommands.Builder<S> builder,

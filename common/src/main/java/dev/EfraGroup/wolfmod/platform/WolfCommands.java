@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import dev.EfraGroup.wolfmod.client.ServerInfoManager;
 import dev.EfraGroup.wolfmod.client.TimeTrial.Timer;
+import dev.EfraGroup.wolfmod.client.WolfClient;
 import dev.EfraGroup.wolfmod.client.GhostConfig;
 import dev.EfraGroup.wolfmod.client.ghost.GhostManagerClient;
 import dev.EfraGroup.wolfmod.client.hud.FastestLap;
@@ -64,7 +65,10 @@ public final class WolfCommands {
             Function<CommandContext<S>, Source<S>> source
     ) {
         dispatcher.register(builder.literal("wolfmod")
-                .requires(src -> ServerInfoManager.isOnWolfNetwork())
+                .then(builder.literal("timing").executes(context -> {
+                    source.apply(context).feedback(Text.literal("§6[WolfMod] §f" + WolfClient.timingStatusLine()));
+                    return 1;
+                }))
                 .then(builder.literal("start").executes(context -> {
                     Timer.start();
                     source.apply(context).feedback(Text.literal("§6[WolfMod] §aTimer iniciado localmente."));
