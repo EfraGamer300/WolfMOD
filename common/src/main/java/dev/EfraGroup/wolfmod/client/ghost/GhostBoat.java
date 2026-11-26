@@ -49,18 +49,18 @@ public final class GhostBoat extends BoatEntity {
     }
 
     /**
-     * O ghost agora e uma entidade real no client world (renderizado pelo
-     * vanilla com interpolacao de tickDelta), mas nao pode interagir
-     * fisicamente com o jogador: sem push e sem colisao.
+     * O ghost nunca colide: nao empurra nem e empurrado, nem bloqueia o jogador.
+     * Era configuravel, mas o modo solido so atrapalhava (dava para travar em cima
+     * do barco fantasma).
      */
     @Override
     public boolean isPushable() {
-        return dev.EfraGroup.wolfmod.client.GhostConfig.get().allowGhostCollision;
+        return false;
     }
 
     @Override
     public boolean collidesWith(Entity entity) {
-        return dev.EfraGroup.wolfmod.client.GhostConfig.get().allowGhostCollision;
+        return false;
     }
 
     public void syncPassenger(Entity passenger) {

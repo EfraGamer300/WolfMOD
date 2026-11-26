@@ -65,7 +65,10 @@ public final class WolfClient {
                 + " ready=" + timing.isReady()
                 + " track=" + timing.currentTrackId()
                 + " timer=" + Timer.getState()
-                + " ping=" + timing.pongDelayMillis() + "ms";
+                + " ping=" + timing.pongDelayMillis() + "ms"
+                + " ghost=" + (GhostManagerClient.isEnabled() ? "on" : "off")
+                + "/" + GhostManagerClient.ghostFrameCount()
+                + "/" + (GhostManagerClient.isPlaybackActive() ? "play" : "idle");
     }
 
     public static <S> void registerCommands(

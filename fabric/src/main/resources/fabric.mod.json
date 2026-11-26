@@ -23,6 +23,9 @@
     ],
     "main": [
       "dev.EfraGroup.wolfmod.fabric.WolfmodFabric"
+    ],
+    "modmenu": [
+      "dev.EfraGroup.wolfmod.fabric.WolfModMenu"
     ]
   },
   "mixins": [
@@ -37,5 +40,9 @@
     "fabricloader": ">=0.16.14",
     "fabric-api": "*",
     "minecraft": "1.21.4"
+  },
+  "recommends": {
+    "yacl": "*",
+    "modmenu": "*"
   }
 }

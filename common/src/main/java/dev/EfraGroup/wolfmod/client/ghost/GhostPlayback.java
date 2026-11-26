@@ -7,7 +7,6 @@ public final class GhostPlayback {
     private volatile GhostData ghostData;
     private volatile boolean active;
     private volatile int frameIndex;
-    private volatile int startWorldTick;
     private volatile int playbackOffsetTicks;
 
     public void setGhostData(GhostData ghostData) {
@@ -19,9 +18,8 @@ public final class GhostPlayback {
         this.playbackOffsetTicks = ticks;
     }
 
-    public void start(int worldTick) {
+    public void start() {
         this.frameIndex = 0;
-        this.startWorldTick = worldTick;
         this.active = ghostData != null && ghostData.frameCount() > 0;
     }
 
@@ -36,7 +34,21 @@ public final class GhostPlayback {
         this.ghostData = null;
     }
 
-    public GhostPose samplePose(int currentWorldTick, float tickDelta) {
+    public boolean hasData() {
+        GhostData data = this.ghostData;
+        return data != null && data.frameCount() > 0;
+    }
+
+    public boolean isActive() {
+        return this.active;
+    }
+
+    public int frameCount() {
+        GhostData data = this.ghostData;
+        return data == null ? 0 : data.frameCount();
+    }
+
+    public GhostPose samplePose(float tickDelta) {
         if (!active) {
             return null;
         }
@@ -46,7 +58,10 @@ public final class GhostPlayback {
             return null;
         }
 
-        float targetTick = (currentWorldTick - startWorldTick) + tickDelta + playbackOffsetTicks;
+        // The frames are stamped in lap ticks and the Timer is the lap clock. Anchoring the
+        // ghost on the world tick instead made it drift: the anchor was captured whenever
+        // playback happened to start (track load, late ghost payload), not when the lap did.
+        float targetTick = Timer.getElapsedNanos() / 50_000_000.0f + tickDelta + playbackOffsetTicks;
         int frameCount = data.frameCount();
         if (frameCount == 0) {
             return null;

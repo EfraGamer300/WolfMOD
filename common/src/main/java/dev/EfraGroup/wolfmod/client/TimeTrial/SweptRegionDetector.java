@@ -39,6 +39,9 @@ public final class SweptRegionDetector {
     private boolean startObserved;
     private boolean endObserved;
     private long startAtNanos;
+    /** Checkpoint indices in lap order, rebuilt with the geometry. */
+    private final List<Integer> checkpointOrder = new ArrayList<>();
+    private int nextCheckpointSlot;
     private final Set<String> insideRegions = new HashSet<>();
 
     /** Motivo pelo qual uma amostra não pode produzir cruzamentos. */
@@ -88,6 +91,9 @@ public final class SweptRegionDetector {
 
     public void setGeometry(TimingGeometry geometry) {
         this.geometry = Objects.requireNonNull(geometry, "geometry");
+        checkpointOrder.clear();
+        checkpointOrder.addAll(geometry.checkpointIndices());
+        nextCheckpointSlot = 0;
         clearSample();
         startObserved = false;
         endObserved = false;
@@ -97,6 +103,8 @@ public final class SweptRegionDetector {
     public void disarm() {
         geometry = null;
         world = null;
+        checkpointOrder.clear();
+        nextCheckpointSlot = 0;
         clearSample();
         startObserved = false;
         endObserved = false;
@@ -116,6 +124,36 @@ public final class SweptRegionDetector {
         clearSample();
         startObserved = false;
         endObserved = false;
+        nextCheckpointSlot = 0;
+    }
+
+    /**
+     * Declares the current lap already started without a sample crossing it. Used when the
+     * server loops a circuit at the finish: the next boundary is the finish, and the detector
+     * must accept it as such (an END without an observed START is ignored).
+     */
+    public void markRunStarted(long atNanos) {
+        startObserved = true;
+        endObserved = false;
+        startAtNanos = atNanos;
+        nextCheckpointSlot = 0;
+    }
+
+    public boolean allCheckpointsPassed() {
+        return nextCheckpointSlot >= checkpointOrder.size();
+    }
+
+    public int checkpointCount() {
+        return checkpointOrder.size();
+    }
+
+    public int passedCheckpoints() {
+        return Math.min(nextCheckpointSlot, checkpointOrder.size());
+    }
+
+    /** Next checkpoint index expected, or -1 when there is nothing left. */
+    public int expectedCheckpointIndex() {
+        return allCheckpointsPassed() ? -1 : checkpointOrder.get(nextCheckpointSlot);
     }
 
     public boolean isPaused() {
@@ -227,6 +265,9 @@ public final class SweptRegionDetector {
             if (fraction < 0.0) {
                 continue;
             }
+            // The analytic entry fraction is exact for AABB/POLY; the bisection narrows it
+            // further to sub-millisecond resolution (8 halvings around the analytic value).
+            fraction = refineEntryFraction(region, before, after, fraction);
             candidates.add(new Crossing(
                     region,
                     fraction,
@@ -253,7 +294,18 @@ public final class SweptRegionDetector {
                 startObserved = true;
                 startAtNanos = crossing.atNanos();
                 accepted.add(crossing);
-            } else if (startObserved && !endObserved) {
+            } else if (role == TimingRegion.Role.CHECKPOINT) {
+                // Ordered checkpoints: only the next expected index counts, and a crossing
+                // out of order (future or already passed) is ignored.
+                if (!startObserved || endObserved || allCheckpointsPassed()) {
+                    continue;
+                }
+                if (crossing.region().index() != checkpointOrder.get(nextCheckpointSlot)) {
+                    continue;
+                }
+                nextCheckpointSlot++;
+                accepted.add(crossing);
+            } else if (startObserved && !endObserved && allCheckpointsPassed()) {
                 if (crossing.atNanos() - startAtNanos < START_END_DEBOUNCE_NANOS) {
                     continue;
                 }
@@ -264,11 +316,46 @@ public final class SweptRegionDetector {
         return accepted;
     }
 
+    /**
+     * Refines the entry fraction with 8 bisection steps (BoatLabs-style sub-tick precision)
+     * around the analytic value, so the crossing instant is pinned to ~1/65536 of a tick
+     * instead of the raw fraction.
+     */
+    private static double refineEntryFraction(
+            TimingRegion region,
+            Vec3d before,
+            Vec3d after,
+            double approximate
+    ) {
+        final int iterations = 8;
+        final double halfWindow = 1.0 / 256.0;
+        double inside = clamp(approximate + halfWindow, 0.0, 1.0);
+        double outside = clamp(approximate - halfWindow, 0.0, 1.0);
+        for (int i = 0; i < iterations; i++) {
+            double middle = (inside + outside) * 0.5;
+            if (region.containsXZ(lerp(before, after, middle))) {
+                inside = middle;
+            } else {
+                outside = middle;
+            }
+        }
+        return (inside + outside) * 0.5;
+    }
+
+    private static Vec3d lerp(Vec3d before, Vec3d after, double fraction) {
+        return new Vec3d(
+                before.x + (after.x - before.x) * fraction,
+                before.y + (after.y - before.y) * fraction,
+                before.z + (after.z - before.z) * fraction
+        );
+    }
+
     public void invalidateRun() {
         clearSample();
         paused = false;
         startObserved = false;
         endObserved = false;
+        nextCheckpointSlot = 0;
     }
 
     private void updateInside(Vec3d position) {

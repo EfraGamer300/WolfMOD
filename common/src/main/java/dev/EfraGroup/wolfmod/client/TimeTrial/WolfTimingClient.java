@@ -28,10 +28,19 @@ public final class WolfTimingClient {
     public static final String REPORT = "tt_v1_report";
     public static final String TRACK = "tt_v1_track";
     public static final String GHOST_UPLOAD = "tt_v1_ghost_upload";
+    /** Reference lap for the live HUD delta (checkpoint times and finish time). */
+    public static final String COMPARE = "tt_v1_compare";
+    /** The player left the track: unload geometry, ghost and any run in progress. */
+    public static final String TRACK_REMOVE = "tt_v1_track_remove";
 
     private static final long PING_INTERVAL_NANOS = 5_000_000_000L;
     private static final long PING_TIMEOUT_NANOS = 2_000_000_000L;
     private static final int MAX_PING_RETRIES = 3;
+    /**
+     * Window after a circuit finish in which the server's disarm belongs to the lap that just
+     * ended, not to the one the client already started on the same crossing.
+     */
+    private static final long LOOP_DISARM_GRACE_NANOS = 2_000_000_000L;
 
     /**
      * Frames per upload chunk. Each frame is 4 bytes of tick varint plus 4 floats, so 512
@@ -39,6 +48,12 @@ public final class WolfTimingClient {
      * keeping the number of packets for a full lap low.
      */
     private static final int UPLOAD_CHUNK_FRAMES = 512;
+
+    /**
+     * Local recording cadence. Matches the server's ghost sample interval: the upload
+     * protocol carries positions only, so a 1-tick capture would be replayed at half speed.
+     */
+    private static final int RECORD_INTERVAL_TICKS = 2;
 
     /** Pending upload chunks, one flushed per tick to avoid frame spikes. */
     private final java.util.Queue<GhostUploadPayload> uploadQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
@@ -68,6 +83,7 @@ public final class WolfTimingClient {
     private boolean v1TimingSeen;
     private String runId = "local";
     private long sequence;
+    private long loopStartedAtNanos;
     private long pingId;
     private long pingSentAtNanos;
     private long nextPingAtNanos;
@@ -78,6 +94,15 @@ public final class WolfTimingClient {
     private Long lastResultDisplayMillis;
     private String currentTrackId;
     private int recordTick;
+
+    /** Reference lap: finish time and checkpoint times (millis since the start), in order. */
+    private long compareLapMillis;
+    private final java.util.List<Long> compareCheckpointMillis = new java.util.ArrayList<>();
+    /** Checkpoint times of the lap being driven, in the same order as the reference. */
+    private final java.util.List<Long> localCheckpointMillis = new java.util.ArrayList<>();
+    private Long lastDeltaMillis;
+    /** Finish time of the previous lap, used for the delta before the first checkpoint. */
+    private long previousLapMillis;
 
     public static boolean isTimingKey(String key) {
         return key != null && key.startsWith("tt_v1_");
@@ -113,6 +138,8 @@ public final class WolfTimingClient {
             case RESULT -> onResult(object);
             case DISARM -> onDisarm();
             case TRACK -> onTrack(object);
+            case COMPARE -> onCompare(object);
+            case TRACK_REMOVE -> onTrackRemove();
             default -> {
             }
         }
@@ -129,10 +156,101 @@ public final class WolfTimingClient {
         String track = text(object, "track");
         if (track != null && !track.isBlank()) {
             currentTrackId = track;
+            // A new track invalidates the previous reference and the last lap.
+            compareLapMillis = 0L;
+            compareCheckpointMillis.clear();
+            previousLapMillis = 0L;
+            lastDeltaMillis = null;
+            localCheckpointMillis.clear();
             // Replay the cached lap immediately: no wait for the server payload, which only
             // arrives once the track finishes loading.
             GhostManagerClient.loadCached(track);
         }
+    }
+
+    /**
+     * The server says the player left the track. Unlike DISARM (which only ends the current
+     * lap), this drops the geometry and the ghost so no local timer can start on a crossing
+     * the server is not timing.
+     */
+    private void onTrackRemove() {
+        detector.disarm();
+        armed = false;
+        geometryInstalled = false;
+        ready = false;
+        currentTrackId = null;
+        localStartNanos = 0L;
+        loopStartedAtNanos = 0L;
+        localCheckpointMillis.clear();
+        compareLapMillis = 0L;
+        compareCheckpointMillis.clear();
+        previousLapMillis = 0L;
+        lastDeltaMillis = null;
+        GhostManagerClient.stopPlayback();
+        GhostManagerClient.clearGhost();
+        GhostManagerClient.cancelRecording();
+        Timer.reset();
+    }
+
+    /**
+     * Reference lap the HUD compares against: finish time and checkpoint times, both in
+     * millis since the start, plus the checkpoint ids that order them.
+     */
+    private void onCompare(JsonObject object) {
+        if (protocol(object) != PROTOCOL_VERSION) {
+            return;
+        }
+        compareLapMillis = longValue(object, "lapMillis", 0L);
+        compareCheckpointMillis.clear();
+        JsonElement checkpoints = object.get("checkpoints");
+        if (checkpoints != null && checkpoints.isJsonArray()) {
+            java.util.List<long[]> parsed = new java.util.ArrayList<>();
+            for (JsonElement element : checkpoints.getAsJsonArray()) {
+                if (element == null || !element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject checkpoint = element.getAsJsonObject();
+                parsed.add(new long[]{
+                        integer(checkpoint, "id", 0),
+                        longValue(checkpoint, "millis", 0L)
+                });
+            }
+            parsed.sort(java.util.Comparator.comparingLong(entry -> entry[0]));
+            for (long[] entry : parsed) {
+                compareCheckpointMillis.add(entry[1]);
+            }
+        }
+        updateDelta();
+    }
+
+    /**
+     * delta = reference - local: positive means the reference lap is slower at this point, so
+     * the HUD shows it as "ahead" (minus), exactly like the BoatLabs HUD.
+     */
+    private void updateDelta() {
+        int index = localCheckpointMillis.size() - 1;
+        if (index < 0 || index >= compareCheckpointMillis.size()) {
+            return;
+        }
+        lastDeltaMillis = compareCheckpointMillis.get(index) - localCheckpointMillis.get(index);
+    }
+
+    /** Whether the server sent a reference lap to compare against. */
+    public boolean hasComparison() {
+        return compareLapMillis > 0L || !compareCheckpointMillis.isEmpty();
+    }
+
+    /** Current delta in millis (reference - local), or {@code null} when unknown. */
+    public Long currentDeltaMillis() {
+        return lastDeltaMillis;
+    }
+
+    public int passedCheckpoints() {
+        return detector.passedCheckpoints();
+    }
+
+    public int totalCheckpoints() {
+        return detector.checkpointCount();
     }
 
     public void handle(WolfConfigPayload payload, WolfResponder responseSender) {
@@ -224,8 +342,11 @@ public final class WolfTimingClient {
         }
         net.minecraft.entity.Entity vehicle = client.player.getVehicle();
         net.minecraft.util.math.Vec3d position = vehicle.getPos();
-        GhostManagerClient.recordFrame(recordTick++, (float) position.x, (float) position.y,
-                (float) position.z, vehicle.getYaw(0.0F));
+        if (recordTick % RECORD_INTERVAL_TICKS == 0) {
+            GhostManagerClient.recordFrame(recordTick, (float) position.x, (float) position.y,
+                    (float) position.z, vehicle.getYaw(0.0F));
+        }
+        recordTick++;
     }
 
     /**
@@ -367,6 +488,12 @@ public final class WolfTimingClient {
         armed = false;
         ready = false;
         v1TimingSeen = false;
+        loopStartedAtNanos = 0L;
+        localCheckpointMillis.clear();
+        compareLapMillis = 0L;
+        compareCheckpointMillis.clear();
+        previousLapMillis = 0L;
+        lastDeltaMillis = null;
         detector.disarm();
         sequence = 0L;
         runId = "local";
@@ -486,10 +613,19 @@ public final class WolfTimingClient {
     }
 
     private void onDisarm() {
-        clientReadySent = false;
-        serverReady = false;
-        ready = false;
-        armed = false;
+        // The disarm that closes a finished lap arrives right after the finish crossing, where
+        // the client already looped into the next lap on a circuit. Do not kill that run.
+        if (loopStartedAtNanos != 0L
+                && System.nanoTime() - loopStartedAtNanos < LOOP_DISARM_GRACE_NANOS) {
+            return;
+        }
+        loopStartedAtNanos = 0L;
+        localCheckpointMillis.clear();
+        // Only the run is over, not the session. The geometry stays valid for the next lap
+        // and the server arms a fresh attempt as soon as the player crosses the start line
+        // again — dropping `armed` here made the client miss that crossing, leaving only the
+        // server-side timer until the player switched tracks and came back. The negotiation
+        // flags stay as they are because the server does not send READY again.
         detector.resetRun();
         sequence = 0L;
         localStartNanos = 0L;
@@ -522,10 +658,25 @@ public final class WolfTimingClient {
             if (nextRunId == null || nextRunId.isBlank()) {
                 return;
             }
+            // Every new attempt ships the same regions under a fresh runId. Installing them
+            // again would clear the detector mid-lap (it arms as the player crosses the line),
+            // so only swap the geometry when the regions really changed. Compare as sets: the
+            // region query has no ORDER BY, so the same track can come back in another order.
+            TimingGeometry current = detector.geometry();
+            boolean regionsChanged = current == null
+                    || !new java.util.HashSet<>(current.regions())
+                            .equals(new java.util.HashSet<>(geometry.regions()));
             runId = nextRunId;
             sequence = 0L;
-            localStartNanos = 0L;
-            detector.setGeometry(geometry);
+            if (regionsChanged) {
+                localStartNanos = 0L;
+                detector.setGeometry(geometry);
+            } else if (Timer.isRunning() && localStartNanos > 0L) {
+                // The server armed a fresh attempt for a lap that is already running (looped
+                // circuit). Re-announce the client start under the new runId so the finish can
+                // still use the client-side timing.
+                sendReport(TimingRegion.Role.START, localStartNanos, localStartNanos, 0L, "rebind");
+            }
             geometryInstalled = true;
             armed = true;
             clientReadySent = false;
@@ -541,18 +692,41 @@ public final class WolfTimingClient {
         long atNanos = crossing.atNanos();
         if (role == TimingRegion.Role.START) {
             localStartNanos = atNanos;
+            loopStartedAtNanos = 0L;
+            localCheckpointMillis.clear();
+            // Before the first checkpoint there is no split to compare yet: use the previous
+            // lap's finish against the reference (BoatLabs keeps the last lap for this).
+            lastDeltaMillis = previousLapMillis > 0L && compareLapMillis > 0L
+                    ? compareLapMillis - previousLapMillis
+                    : null;
             Timer.startAtNanos(atNanos);
+            // Playback was started when the track loaded, but its frames are stamped in lap
+            // ticks and only advance while the timer runs. Rebase it on the lap clock, or the
+            // ghost starts already past its last frame (which is why it stopped showing).
+            GhostManagerClient.startPlayback();
             // Begin this client's own copy of the lap. recordTick restarts at 0 so the tick
             // stamps line up with the playback index the ghost renderer expects.
             recordTick = 0;
             GhostManagerClient.beginRecording(currentTrackId);
             sendReport(role, atNanos, atNanos, 0L, crossing.region().id());
+        } else if (role == TimingRegion.Role.CHECKPOINT) {
+            long startNanos = localStartNanos > 0L ? localStartNanos : Timer.getStartAtNanos();
+            if (startNanos <= 0L) {
+                return;
+            }
+            localCheckpointMillis.add(Math.max(0L, atNanos - startNanos) / 1_000_000L);
+            updateDelta();
         } else if (role == TimingRegion.Role.END) {
             long startNanos = localStartNanos > 0L ? localStartNanos : Timer.getStartAtNanos();
             Timer.stopAtNanos(atNanos);
             long displayMillis = startNanos > 0L
                 ? Math.max(0L, atNanos - startNanos) / 1_000_000L
                 : Timer.getElapsedMillis();
+            // Final delta against the reference lap (same sign convention as the checkpoints).
+            previousLapMillis = displayMillis;
+            if (compareLapMillis > 0L && displayMillis > 0L) {
+                lastDeltaMillis = compareLapMillis - displayMillis;
+            }
             sendReport(role, startNanos, atNanos, displayMillis, crossing.region().id());
             // Only a lap that actually beat the cached best is worth offering to the server.
             if (currentTrackId != null && displayMillis > 0L
@@ -562,6 +736,21 @@ public final class WolfTimingClient {
                 GhostManagerClient.cancelRecording();
             }
             detector.resetRun();
+            // Circuits (START == END) are looped by the server at this exact crossing: it
+            // starts the next lap right away instead of waiting for a new entry. Starting the
+            // client lap on the same instant is what keeps the HUD and the ghost alive on the
+            // second lap; otherwise they only come back on the next crossing.
+            TimingGeometry geometry = detector.geometry();
+            if (geometry != null && geometry.isCircularStartFinish()) {
+                loopStartedAtNanos = System.nanoTime();
+                detector.markRunStarted(atNanos);
+                localStartNanos = atNanos;
+                localCheckpointMillis.clear();
+                Timer.startAtNanos(atNanos);
+                GhostManagerClient.startPlayback();
+                recordTick = 0;
+                GhostManagerClient.beginRecording(currentTrackId);
+            }
         }
     }
 

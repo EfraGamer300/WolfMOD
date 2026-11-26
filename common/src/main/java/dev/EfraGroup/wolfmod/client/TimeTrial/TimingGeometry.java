@@ -141,8 +141,47 @@ public final class TimingGeometry {
         return regionsOfRole(Role.END);
     }
 
+    public List<TimingRegion> checkpointRegions() {
+        return regionsOfRole(Role.CHECKPOINT);
+    }
+
+    public boolean hasCheckpoints() {
+        return !checkpointRegions().isEmpty();
+    }
+
+    /** Checkpoint indices in the order a lap must cross them (server checkpoint ids). */
+    public List<Integer> checkpointIndices() {
+        List<Integer> indices = new ArrayList<>();
+        for (TimingRegion region : regions.values()) {
+            if (region.role() == Role.CHECKPOINT && !indices.contains(region.index())) {
+                indices.add(region.index());
+            }
+        }
+        indices.sort(Integer::compareTo);
+        return List.copyOf(indices);
+    }
+
     public boolean isEmpty() {
         return regions.isEmpty();
+    }
+
+    /**
+     * Whether the finish line is the start line (a circuit). The server loops the lap at the
+     * finish crossing when the two regions share the same bounds, so the client can start the
+     * next lap locally at exactly the same instant instead of waiting for a crossing that
+     * will never happen.
+     */
+    public boolean isCircularStartFinish() {
+        List<TimingRegion> starts = startRegions();
+        List<TimingRegion> ends = endRegions();
+        for (TimingRegion start : starts) {
+            for (TimingRegion end : ends) {
+                if (start.min().equals(end.min()) && start.max().equals(end.max())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public int size() {
@@ -246,7 +285,8 @@ public final class TimingGeometry {
         if (shape == Shape.POLY && (points == null || points.length < 3)) {
             throw new IllegalArgumentException("Região POLY sem pontos: " + id);
         }
-        return new TimingRegion(id, role, shape, min, max, points);
+        int regionIndex = integer(object, "index", 0);
+        return new TimingRegion(id, role, shape, min, max, points, regionIndex);
     }
 
     private static double[] parseBounds(JsonObject object) {

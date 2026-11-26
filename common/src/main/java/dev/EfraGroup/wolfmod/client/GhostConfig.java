@@ -36,9 +36,6 @@ public final class GhostConfig {
     /** Opacity of the ghost (boat + player), 0.0–1.0. */
     public float ghostOpacity = 0.5f;
 
-    /** Allow the ghost boat to collide with the player. */
-    public boolean allowGhostCollision = false;
-
     /** Render the ghost player model. */
     public boolean ghostPlayerVisible = true;
 

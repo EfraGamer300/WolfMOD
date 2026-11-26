@@ -21,11 +21,18 @@ public final class TimingRegion {
     private final Vec3d min;
     private final Vec3d max;
     private final Vec3d[] points;
+    /** Ordering of checkpoints, as assigned by the server (checkpointId). 0 for other roles. */
+    private final int index;
 
     /** Papel de um cruzamento no protocolo. */
     public enum Role {
         START,
         END,
+        /**
+         * Ordered checkpoint. The client only accepts it when it is the next expected index,
+         * and no lap may finish before every checkpoint was crossed.
+         */
+        CHECKPOINT,
         /**
          * A non-timing region (LAGSTART/LAGEND). The server validates whether it was
          * crossed; the client must never treat it as a lap boundary, so the swept
@@ -43,6 +50,9 @@ public final class TimingRegion {
             }
             if ("END".equals(normalized) || "FINISH".equals(normalized)) {
                 return END;
+            }
+            if ("CHECKPOINT".equals(normalized) || "CP".equals(normalized)) {
+                return CHECKPOINT;
             }
             if ("GUARD".equals(normalized)) {
                 return GUARD;
@@ -82,13 +92,18 @@ public final class TimingRegion {
     }
 
     public TimingRegion(String id, Type type, Vec3d min, Vec3d max, Vec3d[] vertices) {
-        this(id, Role.START, Objects.requireNonNull(type, "type").asShape(), min, max, vertices);
+        this(id, Role.START, Objects.requireNonNull(type, "type").asShape(), min, max, vertices, 0);
     }
 
     public TimingRegion(String id, Role role, Shape shape, Vec3d min, Vec3d max, Vec3d[] points) {
+        this(id, role, shape, min, max, points, 0);
+    }
+
+    public TimingRegion(String id, Role role, Shape shape, Vec3d min, Vec3d max, Vec3d[] points, int index) {
         this.id = requireText(id, "id");
         this.role = Objects.requireNonNull(role, "role");
         this.shape = Objects.requireNonNull(shape, "shape");
+        this.index = index;
         if (this.shape == Shape.AABB) {
             if (min == null || max == null) {
                 throw new IllegalArgumentException("AABB exige bounds min/max");
@@ -149,6 +164,11 @@ public final class TimingRegion {
 
     public Shape shape() {
         return shape;
+    }
+
+    /** Server-assigned ordering for checkpoints; 0 for start/end/guard. */
+    public int index() {
+        return index;
     }
 
     /** Compatibilidade com a API anterior baseada em {@link Type}. */
@@ -219,6 +239,7 @@ public final class TimingRegion {
         return id.equals(region.id)
                 && role == region.role
                 && shape == region.shape
+                && index == region.index
                 && min.equals(region.min)
                 && max.equals(region.max)
                 && Arrays.equals(points, region.points);
@@ -226,14 +247,14 @@ public final class TimingRegion {
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(id, role, shape, min, max);
+        int result = Objects.hash(id, role, shape, min, max, index);
         result = 31 * result + Arrays.hashCode(points);
         return result;
     }
 
     @Override
     public String toString() {
-        return "TimingRegion[" + id + ", " + role + ", " + shape
+        return "TimingRegion[" + id + ", " + role + ", " + shape + ", index=" + index
                 + ", min=" + min + ", max=" + max + ", points=" + Arrays.toString(points) + "]";
     }
 

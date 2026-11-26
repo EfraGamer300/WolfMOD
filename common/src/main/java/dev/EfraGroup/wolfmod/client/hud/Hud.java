@@ -55,6 +55,10 @@ public class Hud {
         TextRenderer renderer = client.textRenderer;
         int fontHeight = renderer.fontHeight;
 
+        // Live delta vs the reference lap (server checkpoint times), falling back to the
+        // cached personal best while the comparison has not arrived.
+        Long deltaMs = computeDeltaMillis();
+
         int dot = displayTime.lastIndexOf('.');
         String main = dot >= 0 ? displayTime.substring(0, dot) : displayTime;
         String millis = dot >= 0 ? displayTime.substring(dot) : "";
@@ -69,7 +73,9 @@ public class Hud {
         int contentW = Math.max(labelRowW, timeW);
         int extras = 1 + ACCENT_W + 1 + PAD_X + PAD_X + 1;
         int w = contentW + extras;
-        int h = 1 + PAD_TOP + fontHeight + ROW_GAP + fontHeight + PAD_BOTTOM + 1;
+        int h = 1 + PAD_TOP + fontHeight + ROW_GAP + fontHeight
+                + (deltaMs != null ? ROW_GAP + fontHeight : 0)
+                + PAD_BOTTOM + 1;
 
         int screenWidth = client.getWindow().getScaledWidth();
         int screenHeight = client.getWindow().getScaledHeight();
@@ -133,30 +139,51 @@ public class Hud {
             context.drawText(renderer, millis, timeX + mainW, timeY, TEXT_MILLIS, true);
         }
 
-        // Delta vs personal best (BoatLabs-style).
+        // Delta vs the reference lap: "-" when ahead (green), "+" when behind (red), "=" ties.
+        if (deltaMs != null) {
+            String deltaText;
+            int deltaColor;
+            if (deltaMs > 0L) {
+                deltaText = "-" + formatMillis(deltaMs);
+                deltaColor = 0xFF00FF00;
+            } else if (deltaMs < 0L) {
+                deltaText = "+" + formatMillis(-deltaMs);
+                deltaColor = 0xFFFF4040;
+            } else {
+                deltaText = "=" + formatMillis(0L);
+                deltaColor = 0xFFFFFF00;
+            }
+            int deltaW = renderer.getWidth(deltaText);
+            int deltaY = timeY + fontHeight + ROW_GAP;
+            context.drawText(renderer, deltaText, contentX + (contentW - deltaW) / 2, deltaY, deltaColor, true);
+        }
+
+        context.getMatrices().pop();
+    }
+
+    /** Delta in millis (reference - local) for the lap in progress, or {@code null}. */
+    private static Long computeDeltaMillis() {
+        try {
+            dev.EfraGroup.wolfmod.client.TimeTrial.WolfTimingClient timing =
+                    dev.EfraGroup.wolfmod.client.WolfClient.timing();
+            if (timing != null) {
+                Long delta = timing.currentDeltaMillis();
+                if (delta != null) {
+                    return delta;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        // Fallback: the cached personal best, while the server reference has not arrived.
         try {
             String trackId = dev.EfraGroup.wolfmod.client.WolfClient.timing().currentTrackId();
             long best = GhostManagerClient.cachedBestMillis(trackId);
             if (best > 0L) {
-                long current = Timer.getElapsedMillis();
-                long deltaMs = best - current;
-                String deltaText;
-                int deltaColor;
-                if (deltaMs >= 0) {
-                    deltaText = "-" + formatMillis(deltaMs);
-                    deltaColor = 0xFF00FF00;
-                } else {
-                    deltaText = "+" + formatMillis(-deltaMs);
-                    deltaColor = 0xFFFF0000;
-                }
-                int deltaW = renderer.getWidth(deltaText);
-                int deltaY = timeY + fontHeight + ROW_GAP;
-                context.drawText(renderer, deltaText, contentX + (contentW - deltaW) / 2, deltaY, deltaColor, true);
+                return best - Timer.getElapsedMillis();
             }
         } catch (RuntimeException ignored) {
         }
-
-        context.getMatrices().pop();
+        return null;
     }
 
     private static String formatMillis(long ms) {

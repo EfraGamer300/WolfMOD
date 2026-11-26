@@ -8,6 +8,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.OtherClientPlayerEntity;
 import net.minecraft.client.util.SkinTextures;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerModelPart;
 import net.minecraft.util.ActionResult;
@@ -21,6 +22,12 @@ public final class GhostPlayer extends OtherClientPlayerEntity {
     @Override
     public ActionResult interact(PlayerEntity player, Hand hand) {
         return ActionResult.PASS;
+    }
+
+    /** O piloto fantasma tambem nao colide com o jogador nem com o barco dele. */
+    @Override
+    public boolean collidesWith(Entity entity) {
+        return false;
     }
 
     /**

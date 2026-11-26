@@ -114,9 +114,7 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
             LOCAL_BEST_MILLIS.put(trackId, cached.lapTimeMs());
         }
         if (enabled) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            int worldTick = client.world != null ? (int) client.world.getTime() : 0;
-            PLAYBACK.start(worldTick);
+            PLAYBACK.start();
         }
         return true;
     }
@@ -189,10 +187,8 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
 
     public static void startPlayback() {
         if (!enabled) return;
-        MinecraftClient client = MinecraftClient.getInstance();
-        int worldTick = client.world != null ? (int) client.world.getTime() : 0;
         PLAYBACK.setPlaybackOffset(GhostConfig.get().ghostPlaybackOffset);
-        PLAYBACK.start(worldTick);
+        PLAYBACK.start();
     }
 
     public static void stopPlayback() {
@@ -222,6 +218,20 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
         return enabled;
     }
 
+    /** Whether a ghost trajectory is loaded (server payload or local cache). */
+    public static boolean hasGhostData() {
+        return PLAYBACK.hasData();
+    }
+
+    /** Whether the ghost is currently advancing through the loaded trajectory. */
+    public static boolean isPlaybackActive() {
+        return PLAYBACK.isActive();
+    }
+
+    public static int ghostFrameCount() {
+        return PLAYBACK.frameCount();
+    }
+
     public static String currentTrackId() {
         return currentTrackId;
     }
@@ -235,7 +245,7 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
         if (client.world == null) {
             return null;
         }
-        return PLAYBACK.samplePose((int) client.world.getTime(), 0.0f);
+        return PLAYBACK.samplePose(0.0f);
     }
 
     /** Chamado no fim do client tick: posiciona o barco a partir do playback. */
@@ -243,7 +253,7 @@ private static volatile GhostLineRenderer.GhostLine currentLine;
         if (!enabled || client.world == null) {
             return;
         }
-        GhostPose pose = PLAYBACK.samplePose((int) client.world.getTime(), 0.0f);
+        GhostPose pose = PLAYBACK.samplePose(0.0f);
         if (pose == null) {
             return;
         }

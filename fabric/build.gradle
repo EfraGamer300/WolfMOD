@@ -40,6 +40,14 @@ dependencies {
     implementation "com.alphacephei:vosk:${rootProject.vosk_version}"
     include "com.alphacephei:vosk:${rootProject.vosk_version}"
 
+    // Tela de configuracao: YACL desenha, Mod Menu expoe o botao. Os jars publicados
+    // sao buildados com Loom 1.8/1.10 e o nosso Architectury Loom 1.7 recusa carrega-los
+    // como mod dependency, entao usamos copias remapeadas para Yarn (libs/) so para
+    // compilar. Em runtime o jogador instala YACL + Mod Menu originais; sem eles o mod
+    // continua funcionando com a config em JSON.
+    compileOnly files(rootProject.file('libs/yet-another-config-lib-3.7.1-named.jar'))
+    compileOnly files(rootProject.file('libs/modmenu-13.0.4-named.jar'))
+
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 }

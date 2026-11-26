@@ -32,3 +32,6 @@ build-log.txt
 
 # Estado de ferramentas/agentes
 .commandcode/
+
+# Material de referencia de terceiros (BoatLabs, All-Rights-Reserved): nao versionar
+boatlabs/
